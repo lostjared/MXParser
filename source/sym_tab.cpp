@@ -2,6 +2,7 @@
 #include<algorithm>
 #include<print>
 #include<optional>
+
 namespace mx {
 
     void SymbolTable::enter(const std::string &vname, const Symbol &symbol) {
