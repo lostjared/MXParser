@@ -1,12 +1,12 @@
 #include "MXParser/parser.hpp"
 #include "MXLex/token.hpp"
-#include<iostream>
-#include<string>
-#include<fstream>
+#include <fstream>
+#include <iostream>
+#include <string>
 
 namespace mx {
 
-     std::string html_escape(const std::string &s) {
+    std::string html_escape(const std::string &s) {
         std::string out;
         out.reserve(s.size() * 12 / 10 + 8);
         for (char c : s) {
@@ -80,56 +80,37 @@ namespace mx {
     }
 
     bool Parser::scan() {
-        Token token;
+        tokens.clear();
         try {
-            mx::Token token;
-            mx::TOKEN_TYPE token_type;
+            Token token;
+            TOKEN_TYPE token_type;
             while ((token_type = scanner.lex(token)) != mx::TOKEN_TYPE::TOKEN_NULL) {
                 if (token_type == mx::TOKEN_TYPE::TOKEN_ERROR) {
                     std::cerr << "MXParser:" << token << "\n";
                     return false;
                 }
-                std::string id_token = token.get_token();
-
-                if (token_type == mx::TOKEN_TYPE::IDENTIFIER) {
-                        mx::Symbol sym{};
-                        sym.sym_type = mx::SYMBOL_TYPE::SYMBOL_IDENTIFER;
-                        sym.sym_variable_name = id_token;
-                        sym.sym_variable_value = "";
-                        table.enter(id_token, sym);
-                } else if (token_type == mx::TOKEN_TYPE::OPERATOR && !id_token.empty() && id_token.at(0) == '{') {
-                    table.push_scope();
-
-                } else if (token_type == mx::TOKEN_TYPE::OPERATOR && !id_token.empty() && id_token.at(0) == '}') {
-                    table.pop_scope();
-                }
-
                 tokens.push_back(token);
             }
+            token.clear();
+            token.set_line(scanner.get_line());
+            tokens.push_back(token);
         } catch (const mx::ScannerError &e) {
             std::cerr << "MXLex: Token Error Exception: " << e.what() << "\n";
             return false;
         }
-
-        if(tokens.empty()) {
-            std::cerr << "MXLex: Error: no token returned.\n";
-            return false;
-        }
-        return  true;
+        return true;
     }
 
     bool Parser::parse() {
-        if(!scan())
+        if (!scan())
             return false;
 
         return true;
-
     }
 
     void Parser::print_tokens(std::ostream &out) {
-        table.print(out);
         out << "Tokens: \n";
-        for(const auto &i : tokens) {
+        for (const auto &i : tokens) {
             out << i << std::endl;
         }
     }
