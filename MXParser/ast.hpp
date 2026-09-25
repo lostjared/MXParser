@@ -1,10 +1,9 @@
 #pragma once
 
-#include<memory>
-#include<string>
-#include<iostream>
-#include<print>
-
+#include <iostream>
+#include <memory>
+#include <print>
+#include <string>
 
 namespace mx {
 
@@ -17,7 +16,4 @@ namespace mx {
         virtual std::string toString() const = 0;
     };
 
-
-}
-
-
+} // namespace mx
