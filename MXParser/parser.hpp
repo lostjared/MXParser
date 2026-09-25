@@ -27,7 +27,7 @@ namespace mx {
         bool scan();
         bool parse();
         void error_message(const std::string &message, int line);
-
+        void print_tokens(std::ostream &out);
       protected:
         Scanner scanner;
         SymbolTable table;

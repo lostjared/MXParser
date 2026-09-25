@@ -86,9 +86,24 @@ namespace mx {
             mx::TOKEN_TYPE token_type;
             while ((token_type = scanner.lex(token)) != mx::TOKEN_TYPE::TOKEN_NULL) {
                 if (token_type == mx::TOKEN_TYPE::TOKEN_ERROR) {
-                    std::cerr << token << "\n";
+                    std::cerr << "MXParser:" << token << "\n";
                     return false;
                 }
+                std::string id_token = token.get_token();
+
+                if (token_type == mx::TOKEN_TYPE::IDENTIFIER) {
+                        mx::Symbol sym{};
+                        sym.sym_type = mx::SYMBOL_TYPE::SYMBOL_IDENTIFER;
+                        sym.sym_variable_name = id_token;
+                        sym.sym_variable_value = "";
+                        table.enter(id_token, sym);
+                } else if (token_type == mx::TOKEN_TYPE::OPERATOR && !id_token.empty() && id_token.at(0) == '{') {
+                    table.push_scope();
+
+                } else if (token_type == mx::TOKEN_TYPE::OPERATOR && !id_token.empty() && id_token.at(0) == '}') {
+                    table.pop_scope();
+                }
+
                 tokens.push_back(token);
             }
         } catch (const mx::ScannerError &e) {
@@ -109,6 +124,14 @@ namespace mx {
 
         return true;
 
+    }
+
+    void Parser::print_tokens(std::ostream &out) {
+        table.print(out);
+        out << "Tokens: \n";
+        for(const auto &i : tokens) {
+            out << i << std::endl;
+        }
     }
 
     void Parser::error_message(const std::string &message, int line) { std::println("MXParser: Error: {} on Line: {}", message, line); }

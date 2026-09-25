@@ -33,7 +33,7 @@ namespace mx {
         void push_scope();
         void pop_scope();
         static std::string sym_to_string(SYMBOL_TYPE symbol);
-
+        void print(std::ostream &out);
       private:
         std::vector<std::vector<Symbol>> scope;
         std::string indent;

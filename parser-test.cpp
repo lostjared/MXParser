@@ -48,6 +48,7 @@ int main(int argc, char **argv) {
             file.close();
             return EXIT_FAILURE;
         }
+        parser.print_tokens(std::cout);
     } catch (mx::ParserException &p) {
         std::cerr << "MXParser: Parser Exception: " << p.what() << std::endl;
         file.close();

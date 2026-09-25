@@ -19,7 +19,6 @@ namespace mx {
             push_scope();
         }
         keyval.depth = static_cast<int>(scope.size());
-        std::println("symbol: {}:{} -> {}", keyval.depth, vname, sym_to_string(keyval.sym_type));
         scope.back().push_back(keyval);
     }
 
@@ -82,6 +81,15 @@ namespace mx {
             return "keyword";
         }
         return "unknown";
+    }
+
+    void SymbolTable::print(std::ostream &out) {
+        out << "Symbol Table: " << std::endl;
+        for(const auto &scope_i : scope) {
+            for(const auto &keyval : scope_i) {
+                out << "Symbol: " << keyval.depth << ":" << keyval.sym_variable_name << " -> " << sym_to_string(keyval.sym_type) << std::endl;
+            }
+        }
     }
 
     bool SymbolTable::is_keyword(const std::string &key) {
