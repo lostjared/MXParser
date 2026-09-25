@@ -1,10 +1,7 @@
 #pragma once
 
-#include<memory>
-#include<print>
-#include<string>
+#include <memory>
+#include <print>
+#include <string>
 
-namespace mx {
-
-
-}
+namespace mx {}

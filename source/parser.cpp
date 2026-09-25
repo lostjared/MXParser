@@ -2,13 +2,7 @@
 
 namespace mx {
 
-    bool Parser::parse() {
+    bool Parser::parse() { return true; }
 
-
-        return true;
-    }
-
-    void Parser::error_message(const std::string &message, int line) {
-        std::println("Error: {} on Line: {}", message, line);
-    }
-}
+    void Parser::error_message(const std::string &message, int line) { std::println("Error: {} on Line: {}", message, line); }
+} // namespace mx
