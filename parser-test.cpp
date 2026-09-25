@@ -1,5 +1,6 @@
 #include <Argz/argz.hpp>
 #include <MXParser/parser.hpp>
+#include <MXParser/ast.hpp>
 #include <cstdlib>
 #include <fstream>
 #include <string>
