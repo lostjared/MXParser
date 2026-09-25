@@ -1,0 +1,16 @@
+BasedOnStyle: LLVM
+BreakBeforeBraces: Attach
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 4
+UseTab: Never
+PointerAlignment: Right
+ReferenceAlignment: Pointer
+ColumnLimit: 1000
+NamespaceIndentation: All
+BinPackArguments: false
+BinPackParameters: false
+AlignAfterOpenBracket: Align
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+BreakAfterReturnType: None

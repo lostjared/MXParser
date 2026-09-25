@@ -8,19 +8,17 @@ namespace mx {
     void SymbolTable::enter(const std::string &vname, const Symbol &symbol) {
             auto keyval = symbol;
             if(is_keyword(vname)) {
-                keyval.sym_type = SYMBOL_TYPE::SYMBOL_KEYWORD;
                 return;
             } else {
-                if(exists(vname)) {
+                if(exists_current_scope(vname)) {
                     return;
                 }
-                keyval.sym_type = SYMBOL_TYPE::SYMBOL_IDENTIFER;
             }
             keyval.sym_variable_name = vname;
             if(scope.empty()) {
                 push_scope();
             }
-            keyval.depth = static_cast<size_t>(scope.size());
+            keyval.depth = static_cast<int>(scope.size());
             std::println("symbol: {}:{} -> {}",keyval.depth,  vname, sym_to_string(keyval.sym_type));
             scope.back().push_back(keyval);
     }
@@ -31,8 +29,19 @@ namespace mx {
             return false;
         return true;
     }
+
+    bool SymbolTable::exists_current_scope(const std::string &vname) {
+	    if(scope.empty())
+		    return false;
+	    const auto &current_scope = scope.back();
+	    for(auto it = current_scope.rbegin(); it != current_scope.rend(); ++it) {
+		    if(it->sym_variable_name == vname)
+			    return true;
+	    }
+	    return false;
+    }
+
     std::optional<Symbol> SymbolTable::lookup(const std::string &vname) {
-        Symbol sym;
         for(auto scope_i = scope.rbegin(); scope_i != scope.rend(); ++scope_i) {
             for(auto key = scope_i->rbegin(); key != scope_i->rend(); ++key) {
                 if(key->sym_variable_name == vname)

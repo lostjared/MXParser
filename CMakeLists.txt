@@ -9,6 +9,7 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 find_package(MXLex REQUIRED)
+find_packagE(Argz REQUIRED)
 
 add_library(mxparser STATIC
     source/parser.cpp
@@ -36,7 +37,11 @@ target_compile_options(test-parser PRIVATE
     -pedantic
 )
 
-target_link_libraries(test-parser PRIVATE mxparser MXLex::mxlex)
+add_executable(parser-test parser-test.cpp)
+
+target_compile_options(parser-test PRIVATE -Wall -Wextra -pedantic)
+target_link_libraries(test-parser PRIVATE mxparser MXLex::mxlex Argz::argz)
+target_link_libraries(parser-test PRIVATE mxparser MXLex::mxlex Argz::argz)
 
 install(TARGETS mxparser
     EXPORT mxparserTargets

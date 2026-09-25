@@ -25,6 +25,7 @@ namespace mx {
     class SymbolTable {
     public:
         bool exists(const std::string &vname);
+	bool exists_current_scope(const std::string &vname);
         void enter(const std::string &vname, const Symbol &symbol);
         std::optional<Symbol> lookup(const std::string &vname);
         bool is_keyword(const std::string &key);
