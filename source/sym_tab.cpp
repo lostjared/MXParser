@@ -85,8 +85,8 @@ namespace mx {
 
     void SymbolTable::print(std::ostream &out) {
         out << "Symbol Table: " << std::endl;
-        for(const auto &scope_i : scope) {
-            for(const auto &keyval : scope_i) {
+        for (const auto &scope_i : scope) {
+            for (const auto &keyval : scope_i) {
                 out << "Symbol: " << keyval.depth << ":" << keyval.sym_variable_name << " -> " << sym_to_string(keyval.sym_type) << std::endl;
             }
         }

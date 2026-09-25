@@ -11,7 +11,7 @@
 namespace mx {
 
     std::string html_escape(const std::string &s);
-    std::string js_escape(const std::string &s); 
+    std::string js_escape(const std::string &s);
 
     class ParserException : public std::runtime_error {
       public:
@@ -28,6 +28,7 @@ namespace mx {
         bool parse();
         void error_message(const std::string &message, int line);
         void print_tokens(std::ostream &out);
+
       protected:
         Scanner scanner;
         SymbolTable table;
