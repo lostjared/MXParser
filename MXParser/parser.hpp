@@ -8,6 +8,9 @@
 
 namespace mx {
 
+    std::string html_escape(const std::string &s);
+    std::string js_escape(const std::string &s); 
+
     class ParserException : public std::runtime_error {
       public:
         ParserException(const std::string &msg) : runtime_error(msg) {}
