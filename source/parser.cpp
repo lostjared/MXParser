@@ -1,6 +1,8 @@
 #include "MXParser/parser.hpp"
+#include "MXLex/token.hpp"
 #include<iostream>
 #include<string>
+#include<fstream>
 
 namespace mx {
 
@@ -77,7 +79,37 @@ namespace mx {
         return html_escape(out);
     }
 
-    bool Parser::parse() { return true; }
+    bool Parser::scan() {
+        Token token;
+        try {
+            mx::Token token;
+            mx::TOKEN_TYPE token_type;
+            while ((token_type = scanner.lex(token)) != mx::TOKEN_TYPE::TOKEN_NULL) {
+                if (token_type == mx::TOKEN_TYPE::TOKEN_ERROR) {
+                    std::cerr << token << "\n";
+                    return false;
+                }
+                tokens.push_back(token);
+            }
+        } catch (const mx::ScannerError &e) {
+            std::cerr << "MXLex: Token Error Exception: " << e.what() << "\n";
+            return false;
+        }
 
-    void Parser::error_message(const std::string &message, int line) { std::println("Error: {} on Line: {}", message, line); }
+        if(tokens.empty()) {
+            std::cerr << "MXLex: Error: no token returned.\n";
+            return false;
+        }
+        return  true;
+    }
+
+    bool Parser::parse() {
+        if(!scan())
+            return false;
+
+        return true;
+
+    }
+
+    void Parser::error_message(const std::string &message, int line) { std::println("MXParser: Error: {} on Line: {}", message, line); }
 } // namespace mx

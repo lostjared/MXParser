@@ -19,10 +19,10 @@ int main(int argc, char **argv) {
                 arg_parser.help(std::cout);
                 exit(EXIT_SUCCESS);
                 break;
-            case 'f':
+            case 256:
                 in_file = arg.arg_value;
                 break;
-            case 'o':
+            case 257:
                 out_file = arg.arg_value;
                 break;
             }
@@ -31,28 +31,29 @@ int main(int argc, char **argv) {
         std::cerr << e.text() << std::endl;
     }
     if (in_file.length() == 0) {
-        std::cerr << "Error required input...\n";
+        std::cerr << "MXParser: Error required input...\n";
         return EXIT_FAILURE;
     }
 
     std::fstream file;
     file.open(in_file, std::ios::in);
     if (!file.is_open()) {
-        std::cerr << "Error opening file: " << in_file << std::endl;
+        std::cerr << "MXParser: Error opening file: " << in_file << std::endl;
         return EXIT_FAILURE;
     }
     try {
         mx::Parser parser(file);
         if (!parser.parse()) {
-            std::cerr << "Parser error." << std::endl;
+            std::cerr << "MXParser: Parse error." << std::endl;
             file.close();
             return EXIT_FAILURE;
         }
     } catch (mx::ParserException &p) {
-        std::cerr << "Parser Exception: " << p.what() << std::endl;
+        std::cerr << "MXParser: Parser Exception: " << p.what() << std::endl;
         file.close();
         return EXIT_FAILURE;
     }
     file.close();
+
     return EXIT_SUCCESS;
 }
