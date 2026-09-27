@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 #include <vector>
-
+#include <stdexcept>
 namespace mx {
 
     std::string html_escape(const std::string &s);
@@ -16,9 +16,6 @@ namespace mx {
     class ParserException : public std::runtime_error {
       public:
         ParserException(const std::string &msg) : runtime_error(msg) {}
-
-      private:
-        std::string message;
     };
 
     class ParserEOF {};
@@ -31,9 +28,10 @@ namespace mx {
         void error_message(const std::string &message, int line);
         void print_tokens(std::ostream &out);
         bool advance();
-        Token &peek(size_t advance) const;
+        Token &peek(size_t offset);
         Token &at(size_t index);
         Token &next();
+	Token &top();
 
       protected:
         Scanner scanner;

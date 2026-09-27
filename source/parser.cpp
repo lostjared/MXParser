@@ -82,6 +82,7 @@ namespace mx {
 
     bool Parser::scan() {
         tokens.clear();
+	index = 0;
         try {
             Token token;
             TOKEN_TYPE token_type;
@@ -110,18 +111,18 @@ namespace mx {
     }
 
     bool Parser::advance() {
-        ++index;
-        if (index >= tokens.size())
+        if (index+1  >= tokens.size())
             return false;
+	++index;
         return true;
     }
 
-    Token &Parser::peek(size_t advance) const {
-        if (index + advance >= tokens.size()) {
-            throw ParserException(std::format("peek index {} out of bounds.\n", index + advance));
+    Token &Parser::peek(size_t offset) {
+        if (index + offset >= tokens.size()) {
+            throw ParserException(std::format("peek index {} out of bounds.\n", index+offset));
         }
 
-        return tokens[index + advance];
+        return tokens[index+offset];
     }
 
     Token &Parser::next() {
@@ -136,6 +137,12 @@ namespace mx {
             return tokens[index];
         }
         throw ParserException(std::format("Index: {}  out of bounds for token loop up", index));
+    }
+
+    Token &Parser::top() {
+	    if(index < tokens.size())
+		    return tokens[index];
+	    throw ParserException(std::format("index out of range for top at index:{}.", index));
     }
 
     void Parser::print_tokens(std::ostream &out) {
