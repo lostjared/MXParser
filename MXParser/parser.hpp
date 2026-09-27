@@ -21,6 +21,8 @@ namespace mx {
         std::string message;
     };
 
+    class ParserEOF {};
+
     class Parser {
       public:
         Parser(std::istream &stream) : scanner{stream}, error_count{0} {}
@@ -28,11 +30,16 @@ namespace mx {
         bool parse();
         void error_message(const std::string &message, int line);
         void print_tokens(std::ostream &out);
+        bool advance();
+        Token &peek(size_t advance) const;
+        Token &at(size_t index);
+        Token &next();
 
       protected:
         Scanner scanner;
         SymbolTable table;
-        size_t error_count;
+        size_t error_count = 0;
+        size_t index = 0;
         std::vector<Token> tokens;
     };
 } // namespace mx

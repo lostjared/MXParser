@@ -1,5 +1,6 @@
 #include "MXParser/parser.hpp"
 #include "MXLex/token.hpp"
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -106,6 +107,35 @@ namespace mx {
             return false;
 
         return true;
+    }
+
+    bool Parser::advance() {
+        ++index;
+        if (index >= tokens.size())
+            return false;
+        return true;
+    }
+
+    Token &Parser::peek(size_t advance) const {
+        if (index + advance >= tokens.size()) {
+            throw ParserException(std::format("peek index {} out of bounds.\n", index + advance));
+        }
+
+        return tokens[index + advance];
+    }
+
+    Token &Parser::next() {
+        if (advance())
+            return tokens[index];
+
+        throw ParserEOF();
+    }
+
+    Token &Parser::at(size_t index) {
+        if (index < tokens.size()) {
+            return tokens[index];
+        }
+        throw ParserException(std::format("Index: {}  out of bounds for token loop up", index));
     }
 
     void Parser::print_tokens(std::ostream &out) {

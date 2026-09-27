@@ -38,10 +38,14 @@ target_compile_options(test-parser PRIVATE
 )
 
 add_executable(parser-test parser-test.cpp)
+add_executable(parse-expr examples/expr.cpp)
 
 target_compile_options(parser-test PRIVATE -Wall -Wextra -pedantic)
+target_compile_options(parse-expr PRIVATE -Wall -Wextra -pedantic)
+
 target_link_libraries(test-parser PRIVATE mxparser MXLex::mxlex Argz::argz)
 target_link_libraries(parser-test PRIVATE mxparser MXLex::mxlex Argz::argz)
+target_link_libraries(parse-expr PRIVATE mxparser MXLex::mxlex Argz::argz)
 
 install(TARGETS mxparser
     EXPORT mxparserTargets
