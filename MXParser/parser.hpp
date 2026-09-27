@@ -4,10 +4,10 @@
 #include <MXLex/token.hpp>
 #include <format>
 #include <print>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
-#include <stdexcept>
 namespace mx {
 
     std::string html_escape(const std::string &s);
@@ -31,7 +31,7 @@ namespace mx {
         Token &peek(size_t offset);
         Token &at(size_t index);
         Token &next();
-	Token &top();
+        Token &top();
 
       protected:
         Scanner scanner;
