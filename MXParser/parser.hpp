@@ -1,13 +1,16 @@
 #pragma once
+#include "MXParser/ast.hpp"
 #include "MXParser/sym_tab.hpp"
 #include <MXLex/scanner.hpp>
 #include <MXLex/token.hpp>
 #include <format>
+#include <memory>
 #include <print>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
+
 namespace mx {
 
     std::string html_escape(const std::string &s);
@@ -39,5 +42,8 @@ namespace mx {
         size_t error_count = 0;
         size_t index = 0;
         std::vector<Token> tokens;
+        std::unique_ptr<ExprNode> factor();
+        std::unique_ptr<ExprNode> term();
+        std::unique_ptr<ExprNode> expr();
     };
 } // namespace mx

@@ -14,6 +14,7 @@ find_packagE(Argz REQUIRED)
 add_library(mxparser STATIC
     source/parser.cpp
     source/sym_tab.cpp
+    source/ast.cpp
 )
 
 add_library(MXParser::mxparser ALIAS mxparser)

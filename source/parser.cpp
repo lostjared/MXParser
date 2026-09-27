@@ -1,8 +1,10 @@
 #include "MXParser/parser.hpp"
 #include "MXLex/token.hpp"
+#include "MXParser/ast.hpp"
 #include <format>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 
 namespace mx {
@@ -107,6 +109,11 @@ namespace mx {
         if (!scan())
             return false;
 
+        auto e = expr();
+        std::cout << e->to_string() << "\n";
+        Evaluate eval;
+        e->accept(eval);
+        std::cout << "Result: " << eval.result() << "\n";
         return true;
     }
 
@@ -150,6 +157,46 @@ namespace mx {
         for (const auto &i : tokens) {
             out << i << std::endl;
         }
+    }
+
+    std::unique_ptr<ExprNode> Parser::factor() {
+        Token &current = top();
+        if (current.get_type() == TOKEN_TYPE::INTEGER_VALUE) {
+            Token value = current;
+            advance();
+            return std::make_unique<NumberNode>(value);
+        }
+        if (current.get_token() == "(") {
+            advance();
+            auto node = expr();
+            if (top().get_token() != ")") {
+                throw ParserException("Expecting closing ) on Lne: " + std::to_string(top().get_line()));
+            }
+            advance();
+            return node;
+        }
+        throw ParserException("Parser error on factor function");
+    }
+    std::unique_ptr<ExprNode> Parser::term() {
+        auto left = factor();
+        while (top().get_token() == "*" || top().get_token() == "/") {
+            Token op = top();
+            advance();
+            auto right = factor();
+            left = std::make_unique<BinaryNode>(std::move(left), op, std::move(right));
+        }
+        return left;
+    }
+
+    std::unique_ptr<ExprNode> Parser::expr() {
+        auto left = term();
+        while (top().get_token() == "+" || top().get_token() == "-") {
+            Token op = top();
+            advance();
+            auto right = term();
+            left = std::make_unique<BinaryNode>(std::move(left), op, std::move(right));
+        }
+        return left;
     }
 
     void Parser::error_message(const std::string &message, int line) { std::println("MXParser: Error: {} on Line: {}", message, line); }
