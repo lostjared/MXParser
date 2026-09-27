@@ -55,7 +55,8 @@ namespace mx {
       public:
         void visit(NumberNode &number) override;
         void visit(BinaryNode &bin_node) override;
- 	int  result() const;
+        int result() const;
+
       private:
         std::vector<int> values;
     };
