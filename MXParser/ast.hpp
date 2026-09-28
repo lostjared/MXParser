@@ -29,7 +29,7 @@ namespace mx {
 
     class ExprNode : public ASTNode {
       public:
-        void accept(ASTVisitor &visitor) override {}
+        void accept([[maybe_unused]] ASTVisitor &visitor) override {}
         std::string to_string() const override { return ""; }
     };
 
