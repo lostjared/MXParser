@@ -47,6 +47,11 @@ namespace mx {
         values.push_back(result);
     }
 
+    void Evaluate::visit(UnaryNode &unode) {
+
+
+    }
+
     int Evaluate::result() const { return values.back(); }
 
     void ICode::visit(NumberNode &number) {
@@ -74,6 +79,11 @@ namespace mx {
             throw std::runtime_error("Unknown binary operator. ");
         }
         values.push_back(result);
+    }
+
+    void ICode::visit(UnaryNode &unode) {
+
+
     }
 
     std::string ICode::get_temp() {

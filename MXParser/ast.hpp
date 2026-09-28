@@ -13,12 +13,14 @@ namespace mx {
 
     class NumberNode;
     class BinaryNode;
+    class UnaryNode;
 
     class ASTVisitor {
       public:
         virtual ~ASTVisitor() = default;
         virtual void visit(NumberNode &node) = 0;
         virtual void visit(BinaryNode &node) = 0;
+        virtual void visit(UnaryNode  &node) = 0;
     };
 
     class ASTNode {
@@ -30,8 +32,6 @@ namespace mx {
 
     class ExprNode : public ASTNode {
       public:
-        void accept([[maybe_unused]] ASTVisitor &visitor) override {}
-        std::string to_string() const override { return ""; }
     };
 
     class NumberNode : public ExprNode {
@@ -40,6 +40,15 @@ namespace mx {
         Token value;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override;
+    };
+
+    class UnaryNode : public ExprNode {
+    public:
+      UnaryNode(const Token &op, std::unique_ptr<ExprNode> value) : op(op), value(std::move(value)) {}
+      Token op;
+      std::unique_ptr<ExprNode> value;
+      void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
+      std::string to_string() const override;
     };
 
     class BinaryNode : public ExprNode {
@@ -56,6 +65,7 @@ namespace mx {
       public:
         void visit(NumberNode &number) override;
         void visit(BinaryNode &bin_node) override;
+        void visit(UnaryNode &unode) override;
         int result() const;
       private:
         std::vector<int> values;
@@ -65,6 +75,7 @@ namespace mx {
     public:
       void visit(NumberNode &number) override;
       void visit(BinaryNode &bin_node) override;
+      void visit(UnaryNode &unode) override;
       std::string code();
       std::string get_temp();
     private:
