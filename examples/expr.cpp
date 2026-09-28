@@ -22,9 +22,10 @@ int main(int argc, char **argv) {
     try {
         mx::Parser parser(file);
         parser.parse();
-
     } catch (mx::ParserException &e) {
-        std::cerr << e.what() << std::endl;
+        std::cerr << "Exception: " << e.what() << std::endl;
+    } catch(mx::ParserEOF &e) {
+        std::cerr << "Exception: Unexpected EOF.\n";
     }
 
     return EXIT_SUCCESS;

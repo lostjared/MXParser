@@ -19,6 +19,13 @@ namespace mx {
         return stream.str();
     }
 
+    std::string UnaryNode::to_string() const {
+        std::ostringstream stream;
+        stream << op.get_token() << value->to_string();
+        return stream.str();
+    }
+
+
     void Evaluate::visit(NumberNode &number) { values.push_back(std::stoi(number.value.get_token())); }
 
     void Evaluate::visit(BinaryNode &bin_node) {
@@ -48,8 +55,15 @@ namespace mx {
     }
 
     void Evaluate::visit(UnaryNode &unode) {
-
-
+        unode.value->accept(*this);
+        int num_value = values.back();
+        values.pop_back();
+        if(unode.op.get_token() == "-")
+            values.push_back(-num_value);
+        else if(unode.op.get_token() == "+")
+            values.push_back(num_value);
+        else
+            throw std::runtime_error("Unexpected value as unary operator");
     }
 
     int Evaluate::result() const { return values.back(); }
@@ -82,8 +96,18 @@ namespace mx {
     }
 
     void ICode::visit(UnaryNode &unode) {
-
-
+        unode.value->accept(*this);
+        std::string value = values.back();
+        values.pop_back();
+        if(unode.op.get_token() == "-") {
+            std::string temp_value = get_temp();
+            stream << "NEG " << temp_value <<", " << value << "\n";
+            values.push_back(temp_value);
+        } else if(unode.op.get_token() == "+") {
+            values.push_back(value);
+        } else {
+            throw std::runtime_error ("Unexpected unary opreator ");
+        }
     }
 
     std::string ICode::get_temp() {

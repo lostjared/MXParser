@@ -116,7 +116,6 @@ namespace mx {
         std::cout << "Result: " << eval.result() << "\n";
         ICode icode;
         e->accept(icode);
-
         std::cout << "ICode:\n" << icode.code() << "\n";
         return true;
     }
@@ -165,6 +164,14 @@ namespace mx {
 
     std::unique_ptr<ExprNode> Parser::factor() {
         Token &current = top();
+
+        if(current.get_token() == "-")  {
+            Token value = current;
+            advance();
+            auto factor_value = factor();
+            return std::make_unique<UnaryNode>(value, std::move(factor_value));
+        }
+
         if (current.get_type() == TOKEN_TYPE::INTEGER_VALUE) {
             Token value = current;
             advance();
