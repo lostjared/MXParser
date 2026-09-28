@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include<sstream>
 
 namespace mx {
 
@@ -56,8 +57,19 @@ namespace mx {
         void visit(NumberNode &number) override;
         void visit(BinaryNode &bin_node) override;
         int result() const;
-
       private:
         std::vector<int> values;
     };
+
+    class ICode : public ASTVisitor {
+    public:
+      void visit(NumberNode &number) override;
+      void visit(BinaryNode &bin_node) override;
+      std::string code() const;
+    private:
+      std::ostringstream stream;
+      std::vector<std::string> values;
+      int temp = 0;
+    };
+
 } // namespace mx

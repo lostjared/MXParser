@@ -49,4 +49,34 @@ namespace mx {
 
     int Evaluate::result() const { return values.back(); }
 
+    void ICode::visit(NumberNode &number) {
+        values.push_back(number.value.get_token());
+    }
+    void ICode::visit(BinaryNode &bin_node) {
+        bin_node.left->accept(*this);
+        bin_node.right->accept(*this);
+        std::string right  = values.back();
+        values.pop_back();
+        std::string  left = values.back();
+        values.pop_back();
+        std::string result = "temp_" +  std::to_string(temp++);
+        if (bin_node.op.get_token() == "+")
+            stream << "ADD " << result << ", " <<  left << ", " << right  << "\n";
+        else if (bin_node.op.get_token() == "-")
+            stream << "SUB " << result << ", " << left << ", " << right << "\n";
+        else if (bin_node.op.get_token() == "*")
+            stream << "MUL " << result << ", " << left << ", " << right << "\n";
+        else if (bin_node.op.get_token() == "/") {
+            if (right == "0")
+                throw std::runtime_error("Error divide by zero");
+            stream << "DIV " << result << ", " << left << ", " <<  right << "\n";
+        } else {
+            throw std::runtime_error("Unknown binary operator. ");
+        }
+        values.push_back(result);
+    }
+    std::string ICode::code() const {
+        return stream.str();
+    }
+
 } // namespace mx

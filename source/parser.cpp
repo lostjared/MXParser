@@ -114,6 +114,9 @@ namespace mx {
         Evaluate eval;
         e->accept(eval);
         std::cout << "Result: " << eval.result() << "\n";
+        ICode icode;
+        e->accept(icode);
+        std::cout << "ICode:\n" << icode.code() << "\n";
         return true;
     }
 
