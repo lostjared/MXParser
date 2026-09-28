@@ -65,7 +65,8 @@ namespace mx {
     public:
       void visit(NumberNode &number) override;
       void visit(BinaryNode &bin_node) override;
-      std::string code() const;
+      std::string code();
+      std::string get_temp();
     private:
       std::ostringstream stream;
       std::vector<std::string> values;

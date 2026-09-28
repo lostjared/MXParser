@@ -59,7 +59,7 @@ namespace mx {
         values.pop_back();
         std::string  left = values.back();
         values.pop_back();
-        std::string result = "temp_" +  std::to_string(temp++);
+        std::string result = get_temp();
         if (bin_node.op.get_token() == "+")
             stream << "ADD " << result << ", " <<  left << ", " << right  << "\n";
         else if (bin_node.op.get_token() == "-")
@@ -75,7 +75,18 @@ namespace mx {
         }
         values.push_back(result);
     }
-    std::string ICode::code() const {
+
+    std::string ICode::get_temp() {
+        return "temp_" +  std::to_string(temp++);
+    }
+
+    std::string ICode::code() {
+        if(values.size() == 1 && stream.str().empty()) {
+            std::string temp = get_temp();
+            stream << "CONST " << temp << ", " << values.back() << "\n";
+            values.back() = temp;
+            return stream.str();
+        }
         return stream.str();
     }
 
