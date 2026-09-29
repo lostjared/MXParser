@@ -108,14 +108,22 @@ namespace mx {
     bool Parser::parse() {
         if (!scan())
             return false;
-
-        auto e = statement();;
-        std::cout << e->to_string() << "\n";
-        //Evaluate eval;
-        //e->accept(eval);
-        //std::cout << "Result: " << eval.result() << "\n";
+        Evaluate eval;
         ICode icode;
-        e->accept(icode);
+
+        while(index < tokens.size() - 1) {
+            if(top().get_token() == ";") {
+                advance();
+                continue;
+            }
+            auto e = statement();
+            e->accept(eval);
+            e->accept(icode);
+            if(top().get_token() == ";") {
+                advance();
+            }
+        }
+        std::cout << "Result: " << eval.result() << "\n";
         std::cout << "ICode:\n" << icode.code() << "\n";
         return true;
     }
@@ -192,7 +200,7 @@ namespace mx {
         if(current.get_type() == TOKEN_TYPE::IDENTIFIER) {
             Token value = current;
             advance();
-            return std::make_unique<NumberNode>(value);
+            return std::make_unique<VariableNode>(value);
         }
 
         if (current.get_type() == TOKEN_TYPE::INTEGER_VALUE) {
@@ -209,7 +217,7 @@ namespace mx {
             advance();
             return node;
         }
-        throw ParserException("Parser error on factor function");
+        throw ParserException("Parser error on factor function: " + current.get_token());
     }
     std::unique_ptr<ExprNode> Parser::term() {
         auto left = factor();

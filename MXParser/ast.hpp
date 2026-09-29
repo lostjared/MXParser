@@ -67,7 +67,7 @@ namespace mx {
     };
 
 
-    class VariableNode : public ASTNode {
+    class VariableNode : public ExprNode {
     public:
 
       VariableNode(const Token &type) : var(type) {}
@@ -92,9 +92,11 @@ namespace mx {
         void visit(BinaryNode &bin_node) override;
         void visit(UnaryNode &unode) override;
         void visit(AssignmentNode &anode) override;
+        void visit(VariableNode &vnode) override;
         int result() const;
       private:
         std::vector<int> values;
+        std::unordered_map<std::string, int> vars;
     };
 
     class ICode : public ASTVisitor {

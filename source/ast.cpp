@@ -26,7 +26,9 @@ namespace mx {
     }
 
 
-    void Evaluate::visit(NumberNode &number) { values.push_back(std::stoi(number.value.get_token())); }
+    void Evaluate::visit(NumberNode &number) {
+        values.push_back(std::stoi(number.value.get_token()));
+    }
 
     void Evaluate::visit(BinaryNode &bin_node) {
         bin_node.left->accept(*this);
@@ -67,8 +69,24 @@ namespace mx {
     }
 
     void Evaluate::visit(AssignmentNode &anode) {
-
+        anode.expression->accept(*this);
+        if(!values.empty()) {
+            int val = values.back();
+            vars[anode.var.get_token()] = val;
+            values.pop_back();
+            values.push_back(val);
+        }
     }
+
+    void Evaluate::visit(VariableNode &vnode) {
+        auto value_found = vars.find(vnode.var.get_token());
+        if(value_found == vars.end()) {
+            throw std::runtime_error("Variable " + vnode.var.get_token() + " not found!");
+        } else {
+            values.push_back(vars[vnode.var.get_token()]);
+        }
+    }
+
     int Evaluate::result() const { return values.back(); }
 
     void ICode::visit(VariableNode &vnode) {
