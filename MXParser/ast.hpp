@@ -8,12 +8,15 @@
 #include <string>
 #include <vector>
 #include<sstream>
+#include<unordered_map>
 
 namespace mx {
 
     class NumberNode;
     class BinaryNode;
     class UnaryNode;
+    class AssignmentNode;
+    class VariableNode;
 
     class ASTVisitor {
       public:
@@ -21,6 +24,8 @@ namespace mx {
         virtual void visit(NumberNode &node) = 0;
         virtual void visit(BinaryNode &node) = 0;
         virtual void visit(UnaryNode  &node) = 0;
+        virtual void visit(AssignmentNode &node) = 0;
+        virtual void visit(VariableNode &node) = 0;
     };
 
     class ASTNode {
@@ -61,11 +66,32 @@ namespace mx {
         std::string to_string() const override;
     };
 
+
+    class VariableNode : public ASTNode {
+    public:
+
+      VariableNode(const Token &type) : var(type) {}
+      Token var;
+      void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
+      std::string to_string() const override { return ""; }
+    };
+
+
+    class AssignmentNode : public ASTNode {
+    public:
+        AssignmentNode(const Token &var, std::unique_ptr<ExprNode> expression): var(var), expression(std::move(expression)) {}
+        void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
+        std::string to_string() const override { return ""; }
+        Token var;
+        std::unique_ptr<ExprNode> expression;
+    };
+
     class Evaluate : public ASTVisitor {
       public:
         void visit(NumberNode &number) override;
         void visit(BinaryNode &bin_node) override;
         void visit(UnaryNode &unode) override;
+        void visit(AssignmentNode &anode) override;
         int result() const;
       private:
         std::vector<int> values;
@@ -76,7 +102,10 @@ namespace mx {
       void visit(NumberNode &number) override;
       void visit(BinaryNode &bin_node) override;
       void visit(UnaryNode &unode) override;
+      void visit(AssignmentNode &anode) override;
+      void visit(VariableNode &var) override;
       std::string code();
+      void write_to_stream(std::ostream &out);
       std::string get_temp();
     private:
       std::ostringstream stream;

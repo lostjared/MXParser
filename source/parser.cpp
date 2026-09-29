@@ -109,11 +109,11 @@ namespace mx {
         if (!scan())
             return false;
 
-        auto e = expr();
+        auto e = statement();;
         std::cout << e->to_string() << "\n";
-        Evaluate eval;
-        e->accept(eval);
-        std::cout << "Result: " << eval.result() << "\n";
+        //Evaluate eval;
+        //e->accept(eval);
+        //std::cout << "Result: " << eval.result() << "\n";
         ICode icode;
         e->accept(icode);
         std::cout << "ICode:\n" << icode.code() << "\n";
@@ -162,6 +162,23 @@ namespace mx {
         }
     }
 
+    std::unique_ptr<ASTNode> Parser::statement() {
+        if(top().get_type() == TOKEN_TYPE::IDENTIFIER && peek(1).get_token() == "=") {
+            return assignment();
+        }
+        return expr();
+    }
+    std::unique_ptr<AssignmentNode> Parser::assignment() {
+        if(top().get_type() == TOKEN_TYPE::IDENTIFIER) {
+            Token var = top();
+            advance();
+            advance();
+            auto ex = expr();
+            return std::make_unique<AssignmentNode>(var, std::move(ex));
+        }
+        throw ParserException("Expected Identifier.");
+    }
+
     std::unique_ptr<ExprNode> Parser::factor() {
         Token &current = top();
 
@@ -170,6 +187,12 @@ namespace mx {
             advance();
             auto factor_value = factor();
             return std::make_unique<UnaryNode>(value, std::move(factor_value));
+        }
+
+        if(current.get_type() == TOKEN_TYPE::IDENTIFIER) {
+            Token value = current;
+            advance();
+            return std::make_unique<NumberNode>(value);
         }
 
         if (current.get_type() == TOKEN_TYPE::INTEGER_VALUE) {
@@ -201,6 +224,8 @@ namespace mx {
 
     std::unique_ptr<ExprNode> Parser::expr() {
         auto left = term();
+
+
         while (top().get_token() == "+" || top().get_token() == "-") {
             Token op = top();
             advance();

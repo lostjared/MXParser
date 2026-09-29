@@ -66,8 +66,22 @@ namespace mx {
             throw std::runtime_error("Unexpected value as unary operator");
     }
 
+    void Evaluate::visit(AssignmentNode &anode) {
+
+    }
     int Evaluate::result() const { return values.back(); }
 
+    void ICode::visit(VariableNode &vnode) {
+        values.push_back(vnode.var.get_token());
+    }
+
+    void ICode::visit(AssignmentNode &anode) {
+        anode.expression->accept(*this);
+        if(!values.empty()) {
+            stream << "SET " << anode.var.get_token() << ", " << values.back() << "\n";
+            values.pop_back();
+        }
+    }
     void ICode::visit(NumberNode &number) {
         values.push_back(number.value.get_token());
     }

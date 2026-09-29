@@ -42,6 +42,8 @@ namespace mx {
         size_t error_count = 0;
         size_t index = 0;
         std::vector<Token> tokens;
+        std::unique_ptr<ASTNode> statement();
+        std::unique_ptr<AssignmentNode> assignment();
         std::unique_ptr<ExprNode> factor();
         std::unique_ptr<ExprNode> term();
         std::unique_ptr<ExprNode> expr();
