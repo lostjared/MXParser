@@ -73,7 +73,7 @@ namespace mx {
       VariableNode(const Token &type) : var(type) {}
       Token var;
       void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
-      std::string to_string() const override { return ""; }
+      std::string to_string() const override { return var.get_token(); }
     };
 
 
@@ -81,7 +81,7 @@ namespace mx {
     public:
         AssignmentNode(const Token &var, std::unique_ptr<ExprNode> expression): var(var), expression(std::move(expression)) {}
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
-        std::string to_string() const override { return ""; }
+        std::string to_string() const override { return var.get_token() + "=" + expression->to_string(); }
         Token var;
         std::unique_ptr<ExprNode> expression;
     };

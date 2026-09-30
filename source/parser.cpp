@@ -117,6 +117,7 @@ namespace mx {
                 continue;
             }
             auto e = statement();
+            std::cout << e->to_string() << "\n";
             e->accept(eval);
             e->accept(icode);
             if(top().get_token() == ";") {
