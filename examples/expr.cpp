@@ -29,6 +29,6 @@ int main(int argc, char **argv) {
     } catch(mx::ParserEOF &e) {
         std::cerr << "Exception: Unexpected EOF.\n";
     }
-
+    file.close();
     return EXIT_SUCCESS;
 }
