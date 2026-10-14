@@ -110,22 +110,26 @@ namespace mx {
             return false;
         Evaluate eval;
         ICode icode;
-
-        while(index < tokens.size() - 1) {
-            if(top().get_token() == ";") {
-                advance();
-                continue;
+        try {
+            while(index < tokens.size() - 1) {
+                if(top().get_token() == ";") {
+                    advance();
+                    continue;
+                }
+                auto e = statement();
+                std::cout << e->to_string() << "\n";
+                e->accept(eval);
+                e->accept(icode);
+                if(top().get_token() == ";") {
+                    advance();
+                }
             }
-            auto e = statement();
-            std::cout << e->to_string() << "\n";
-            e->accept(eval);
-            e->accept(icode);
-            if(top().get_token() == ";") {
-                advance();
-            }
+            std::cout << "Result: " << eval.result() << "\n";
+            std::cout << "ICode:\n" << icode.code() << "\n";
+        } catch(std::runtime_error &e) {
+            std::cerr << "Exception: " << e.what()  << "\n";
+            return false;
         }
-        std::cout << "Result: " << eval.result() << "\n";
-        std::cout << "ICode:\n" << icode.code() << "\n";
         return true;
     }
 

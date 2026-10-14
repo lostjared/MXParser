@@ -21,7 +21,9 @@ int main(int argc, char **argv) {
 
     try {
         mx::Parser parser(file);
-        parser.parse();
+        if(!parser.parse()) {
+            std::cerr << "Error: Parsing failed.\n";
+        }
     } catch (mx::ParserException &e) {
         std::cerr << "Exception: " << e.what() << std::endl;
     } catch(mx::ParserEOF &e) {
