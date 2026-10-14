@@ -115,6 +115,11 @@ namespace mx {
         HTMLCode html;
         std::fstream fout;
         fout.open("out.html", std::ios::out);
+
+        if(!fout.is_open()) {
+            throw ParserException("Error could not open output file for writing.\n");
+        }
+
         std::vector<std::string> line_state;;
 
         try {
@@ -124,6 +129,13 @@ namespace mx {
                     continue;
                 }
                 auto e = statement();
+
+                if(index < tokens.size() -1) {
+                    if(top().get_token() != ";" && top().get_token() != ",") {
+                        throw ParserException(std::format("Error expected: ; found: {} at line: {}", top().get_token(), top().get_line()));
+                    }
+                }
+
                 std::string string_rep = e->to_string();
                 std::cout << string_rep << "\n";
                 line_state.push_back(string_rep);
@@ -131,7 +143,7 @@ namespace mx {
                 e->accept(eval);
                 e->accept(icode);
                 e->accept(html);
-                if(top().get_token() == ";") {
+                if(top().get_token() == ";" || top().get_token() == ",") {
                     advance();
                 }
             }
@@ -145,16 +157,19 @@ namespace mx {
             return false;
         }
         fout.close();
+        if(!fout) {
+            throw ParserException("Error writing to output file.");
+        }
         return true;
     }
 
      void Parser::output_html(std::ostream &out, HTMLCode &html, std::vector<std::string> &state) {
          out << "<html><head><title>HTML Test</title></head><body>\n";
          for(const auto &s : state) {
-             out << "<span style=\"color: red;\">" << s << "</span><br>\n";
+             out << "<span style=\"color: red;\">" << html_escape(s) << "</span><br>\n";
         }
          out <<  html.code() << "<br>";
-         out << "</body><html>";
+         out << "</body></html>";
     }
 
     bool Parser::advance() {
@@ -166,7 +181,7 @@ namespace mx {
 
     Token &Parser::peek(size_t offset) {
         if (index + offset >= tokens.size()) {
-            throw ParserException(std::format("peek index {} out of bounds.\n", index + offset));
+            throw ParserException(std::format("peek index {} out of bounds.", index + offset));
         }
 
         return tokens[index + offset];

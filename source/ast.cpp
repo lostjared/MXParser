@@ -87,7 +87,13 @@ namespace mx {
         }
     }
 
-    int Evaluate::result() const { return values.back(); }
+    int Evaluate::result() const {
+        if(values.empty()) {
+            throw std::runtime_error("No values.\n");
+        }
+        return values.back();
+
+    }
 
     void ICode::visit(VariableNode &vnode) {
         values.push_back(vnode.var.get_token());
