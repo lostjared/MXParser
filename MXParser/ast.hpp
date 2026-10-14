@@ -115,4 +115,20 @@ namespace mx {
       int temp = 0;
     };
 
+    class HTMLCode : public ASTVisitor {
+    public:
+      void visit(NumberNode &number) override;
+      void visit(BinaryNode &bin_node) override;
+      void visit(UnaryNode &unode) override;
+      void visit(AssignmentNode &anode) override;
+      void visit(VariableNode &var) override;
+      std::string code();
+      void write_to_stream(std::ostream &out);
+      std::string get_temp();
+    private:
+      std::ostringstream stream;
+      std::vector<std::string> values;
+      int temp = 0;
+    };
+
 } // namespace mx

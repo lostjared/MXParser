@@ -106,10 +106,13 @@ namespace mx {
     }
 
     bool Parser::parse() {
-        if (!scan())
+        if (!scan()) {
+            std::cerr << "Scanning failed.\n";
             return false;
+        }
         Evaluate eval;
         ICode icode;
+        HTMLCode html;
         try {
             while(index < tokens.size() - 1) {
                 if(top().get_token() == ";") {
@@ -120,17 +123,28 @@ namespace mx {
                 std::cout << e->to_string() << "\n";
                 e->accept(eval);
                 e->accept(icode);
+                e->accept(html);
                 if(top().get_token() == ";") {
                     advance();
                 }
             }
             std::cout << "Result: " << eval.result() << "\n";
             std::cout << "ICode:\n" << icode.code() << "\n";
+            std::fstream fout;
+            fout.open("out.html", std::ios::out);
+            output_html(fout, html);
+            fout.close();
         } catch(std::runtime_error &e) {
             std::cerr << "Exception: " << e.what()  << "\n";
             return false;
         }
         return true;
+    }
+
+     void Parser::output_html(std::ostream &out, HTMLCode &html) {
+         out << "<html><head><title>HTML Test</title></head><body>\n";
+         out <<  html.code() << "<br>";
+         out << "</body><html>";
     }
 
     bool Parser::advance() {
@@ -237,8 +251,6 @@ namespace mx {
 
     std::unique_ptr<ExprNode> Parser::expr() {
         auto left = term();
-
-
         while (top().get_token() == "+" || top().get_token() == "-") {
             Token op = top();
             advance();

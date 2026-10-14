@@ -30,12 +30,12 @@ namespace mx {
         bool parse();
         void error_message(const std::string &message, int line);
         void print_tokens(std::ostream &out);
+        void output_html(std::ostream &out, HTMLCode &html);
         bool advance();
         Token &peek(size_t offset);
         Token &at(size_t index);
         Token &next();
         Token &top();
-
       protected:
         Scanner scanner;
         SymbolTable table;

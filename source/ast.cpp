@@ -156,4 +156,73 @@ namespace mx {
         return stream.str();
     }
 
+    // HTMLCode
+
+    void HTMLCode::visit(VariableNode &vnode) {
+        values.push_back(vnode.var.get_token());
+    }
+
+    void HTMLCode::visit(AssignmentNode &anode) {
+        anode.expression->accept(*this);
+        if(!values.empty()) {
+            stream << "<b>SET</b> " << anode.var.get_token() << ", " << values.back() << "<br>\n";
+            values.pop_back();
+        }
+    }
+    void HTMLCode::visit(NumberNode &number) {
+        values.push_back(number.value.get_token());
+    }
+    void HTMLCode::visit(BinaryNode &bin_node) {
+        bin_node.left->accept(*this);
+        bin_node.right->accept(*this);
+        std::string right  = values.back();
+        values.pop_back();
+        std::string  left = values.back();
+        values.pop_back();
+        std::string result = get_temp();
+        if (bin_node.op.get_token() == "+")
+            stream << "<b>ADD</b> " << result << ", " <<  left << ", " << right  << "<br>\n";
+        else if (bin_node.op.get_token() == "-")
+            stream << "<b>SUB</b> " << result << ", " << left << ", " << right << "<br>\n";
+        else if (bin_node.op.get_token() == "*")
+            stream << "<b>MUL</b> " << result << ", " << left << ", " << right << "<br>\n";
+        else if (bin_node.op.get_token() == "/") {
+            if (right == "0")
+                throw std::runtime_error("Error divide by zero");
+            stream << "<b>DIV</b> " << result << ", " << left << ", " <<  right << "<br>\n";
+        } else {
+            throw std::runtime_error("Unknown binary operator. ");
+        }
+        values.push_back(result);
+    }
+
+    void HTMLCode::visit(UnaryNode &unode) {
+        unode.value->accept(*this);
+        std::string value = values.back();
+        values.pop_back();
+        if(unode.op.get_token() == "-") {
+            std::string temp_value = get_temp();
+            stream << "<b>NEG</b> " << temp_value <<", " << value << "<br>\n";
+            values.push_back(temp_value);
+        } else if(unode.op.get_token() == "+") {
+            values.push_back(value);
+        } else {
+            throw std::runtime_error ("Unexpected unary opreator ");
+        }
+    }
+
+    std::string HTMLCode::get_temp() {
+        return "temp_" +  std::to_string(temp++);
+    }
+
+    std::string HTMLCode::code() {
+        if(values.size() == 1 && stream.str().empty()) {
+            std::string temp = get_temp();
+            stream << "<b>CONST</b> " << temp << ", " << values.back() << "<br>\n";
+            values.back() = temp;
+            return stream.str();
+        }
+        return stream.str();
+    }
+
 } // namespace mx
