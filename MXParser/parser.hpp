@@ -30,7 +30,7 @@ namespace mx {
         bool parse();
         void error_message(const std::string &message, int line);
         void print_tokens(std::ostream &out);
-        void output_html(std::ostream &out, HTMLCode &html);
+        void output_html(std::ostream &out, HTMLCode &html, std::vector<std::string> &state);
         bool advance();
         Token &peek(size_t offset);
         Token &at(size_t index);

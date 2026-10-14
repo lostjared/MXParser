@@ -113,6 +113,10 @@ namespace mx {
         Evaluate eval;
         ICode icode;
         HTMLCode html;
+        std::fstream fout;
+        fout.open("out.html", std::ios::out);
+        std::vector<std::string> line_state;;
+
         try {
             while(index < tokens.size() - 1) {
                 if(top().get_token() == ";") {
@@ -120,7 +124,10 @@ namespace mx {
                     continue;
                 }
                 auto e = statement();
-                std::cout << e->to_string() << "\n";
+                std::string string_rep = e->to_string();
+                std::cout << string_rep << "\n";
+                line_state.push_back(string_rep);
+
                 e->accept(eval);
                 e->accept(icode);
                 e->accept(html);
@@ -130,19 +137,22 @@ namespace mx {
             }
             std::cout << "Result: " << eval.result() << "\n";
             std::cout << "ICode:\n" << icode.code() << "\n";
-            std::fstream fout;
-            fout.open("out.html", std::ios::out);
-            output_html(fout, html);
-            fout.close();
+
+            output_html(fout, html, line_state);
+
         } catch(std::runtime_error &e) {
             std::cerr << "Exception: " << e.what()  << "\n";
             return false;
         }
+        fout.close();
         return true;
     }
 
-     void Parser::output_html(std::ostream &out, HTMLCode &html) {
+     void Parser::output_html(std::ostream &out, HTMLCode &html, std::vector<std::string> &state) {
          out << "<html><head><title>HTML Test</title></head><body>\n";
+         for(const auto &s : state) {
+             out << "<span style=\"color: red;\">" << s << "</span><br>\n";
+        }
          out <<  html.code() << "<br>";
          out << "</body><html>";
     }
