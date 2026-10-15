@@ -7,7 +7,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include<sstream>
+#include <sstream>
+#include<cstdint>
 #include<unordered_map>
 
 namespace mx {
@@ -96,8 +97,8 @@ namespace mx {
         int result() const;
         void clear();
       private:
-        std::vector<int> values;
-        std::unordered_map<std::string, int> vars;
+        std::vector<std::int64_t> values;
+        std::unordered_map<std::string, std::int64_t> vars;
     };
 
     class ICode : public ASTVisitor {
@@ -114,7 +115,7 @@ namespace mx {
     private:
       std::ostringstream stream;
       std::vector<std::string> values;
-      int temp = 0;
+      std::int64_t temp = 0;
     };
 
     class HTMLCode : public ASTVisitor {
@@ -131,7 +132,7 @@ namespace mx {
     private:
       std::ostringstream stream;
       std::vector<std::string> values;
-      int temp = 0;
+      std::int64_t temp = 0;
     };
 
 } // namespace mx

@@ -27,7 +27,7 @@ namespace mx {
 
 
     void Evaluate::visit(NumberNode &number) {
-        values.push_back(std::stoi(number.value.get_token()));
+        values.push_back(std::stol(number.value.get_token()));
     }
 
     void Evaluate::visit(BinaryNode &bin_node) {
