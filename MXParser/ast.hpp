@@ -94,6 +94,7 @@ namespace mx {
         void visit(AssignmentNode &anode) override;
         void visit(VariableNode &vnode) override;
         int result() const;
+        void clear();
       private:
         std::vector<int> values;
         std::unordered_map<std::string, int> vars;
@@ -109,6 +110,7 @@ namespace mx {
       std::string code();
       void write_to_stream(std::ostream &out);
       std::string get_temp();
+      void clear();
     private:
       std::ostringstream stream;
       std::vector<std::string> values;
@@ -125,6 +127,7 @@ namespace mx {
       std::string code();
       void write_to_stream(std::ostream &out);
       std::string get_temp();
+      void clear();
     private:
       std::ostringstream stream;
       std::vector<std::string> values;

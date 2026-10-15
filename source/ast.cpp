@@ -95,6 +95,16 @@ namespace mx {
 
     }
 
+    void Evaluate::clear() {
+        values.clear();
+    }
+
+    void ICode::clear() {
+        values.clear();
+        stream.str("");
+        stream.clear();
+    }
+
     void ICode::visit(VariableNode &vnode) {
         values.push_back(vnode.var.get_token());
     }
@@ -163,6 +173,12 @@ namespace mx {
     }
 
     // HTMLCode
+
+    void HTMLCode::clear() {
+        values.clear();
+        stream.str("");
+        stream.clear();
+    }
 
     void HTMLCode::visit(VariableNode &vnode) {
         values.push_back(vnode.var.get_token());

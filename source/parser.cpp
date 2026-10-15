@@ -121,18 +121,28 @@ namespace mx {
         }
 
         std::vector<std::string> line_state;;
-
+        std::string gen_icode, gen_html_code;
         try {
             while(index < tokens.size() - 1) {
                 if(top().get_token() == ";") {
                     advance();
                     continue;
                 }
+
+                eval.clear();
+                icode.clear();
+                html.clear();
                 auto e = statement();
 
                 if(index < tokens.size() -1) {
                     if(top().get_token() != ";" && top().get_token() != ",") {
                         throw ParserException(std::format("Error expected: ; found: {} at line: {}", top().get_token(), top().get_line()));
+                    }
+                }
+
+                if(top().get_token() == ",") {
+                    if(index + 1 >= tokens.size() -1 || peek(1).get_token() == ";" || peek(1).get_token() == ",") {
+                        throw ParserException("Expected statement after comma");
                     }
                 }
 
@@ -143,14 +153,18 @@ namespace mx {
                 e->accept(eval);
                 e->accept(icode);
                 e->accept(html);
+
+                gen_icode += icode.code();
+                gen_html_code += html.code();
+
                 if(top().get_token() == ";" || top().get_token() == ",") {
                     advance();
                 }
             }
             std::cout << "Result: " << eval.result() << "\n";
-            std::cout << "ICode:\n" << icode.code() << "\n";
+            std::cout << "ICode:\n" << gen_icode << "\n";
 
-            output_html(fout, html, line_state);
+            output_html(fout, gen_html_code, line_state);
 
         } catch(std::runtime_error &e) {
             std::cerr << "Exception: " << e.what()  << "\n";
@@ -163,12 +177,12 @@ namespace mx {
         return true;
     }
 
-     void Parser::output_html(std::ostream &out, HTMLCode &html, std::vector<std::string> &state) {
+     void Parser::output_html(std::ostream &out, const std::string &html, std::vector<std::string> &state) {
          out << "<html><head><title>HTML Test</title></head><body>\n";
          for(const auto &s : state) {
              out << "<span style=\"color: red;\">" << html_escape(s) << "</span><br>\n";
         }
-         out <<  html.code() << "<br>";
+         out <<  html << "<br>";
          out << "</body></html>";
     }
 
