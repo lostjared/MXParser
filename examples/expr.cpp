@@ -21,12 +21,12 @@ int main(int argc, char **argv) {
 
     try {
         mx::Parser parser(file);
-        if(!parser.parse()) {
+        if (!parser.parse()) {
             std::cerr << "Error: Parsing failed.\n";
         }
     } catch (mx::ParserException &e) {
         std::cerr << "Exception: " << e.what() << std::endl;
-    } catch(mx::ParserEOF &e) {
+    } catch (mx::ParserEOF &e) {
         std::cerr << "Exception: Unexpected EOF.\n";
     }
     file.close();

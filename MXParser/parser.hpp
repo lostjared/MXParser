@@ -36,6 +36,7 @@ namespace mx {
         Token &at(size_t index);
         Token &next();
         Token &top();
+
       protected:
         Scanner scanner;
         SymbolTable table;

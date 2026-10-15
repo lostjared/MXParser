@@ -25,10 +25,7 @@ namespace mx {
         return stream.str();
     }
 
-
-    void Evaluate::visit(NumberNode &number) {
-        values.push_back(std::stol(number.value.get_token()));
-    }
+    void Evaluate::visit(NumberNode &number) { values.push_back(std::stol(number.value.get_token())); }
 
     void Evaluate::visit(BinaryNode &bin_node) {
         bin_node.left->accept(*this);
@@ -60,9 +57,9 @@ namespace mx {
         unode.value->accept(*this);
         int num_value = values.back();
         values.pop_back();
-        if(unode.op.get_token() == "-")
+        if (unode.op.get_token() == "-")
             values.push_back(-num_value);
-        else if(unode.op.get_token() == "+")
+        else if (unode.op.get_token() == "+")
             values.push_back(num_value);
         else
             throw std::runtime_error("Unexpected value as unary operator");
@@ -70,7 +67,7 @@ namespace mx {
 
     void Evaluate::visit(AssignmentNode &anode) {
         anode.expression->accept(*this);
-        if(!values.empty()) {
+        if (!values.empty()) {
             int val = values.back();
             vars[anode.var.get_token()] = val;
             values.pop_back();
@@ -80,7 +77,7 @@ namespace mx {
 
     void Evaluate::visit(VariableNode &vnode) {
         auto value_found = vars.find(vnode.var.get_token());
-        if(value_found == vars.end()) {
+        if (value_found == vars.end()) {
             throw std::runtime_error("Variable " + vnode.var.get_token() + " not found!");
         } else {
             values.push_back(vars[vnode.var.get_token()]);
@@ -88,16 +85,13 @@ namespace mx {
     }
 
     int Evaluate::result() const {
-        if(values.empty()) {
+        if (values.empty()) {
             throw std::runtime_error("No values.\n");
         }
         return values.back();
-
     }
 
-    void Evaluate::clear() {
-        values.clear();
-    }
+    void Evaluate::clear() { values.clear(); }
 
     void ICode::clear() {
         values.clear();
@@ -105,30 +99,26 @@ namespace mx {
         stream.clear();
     }
 
-    void ICode::visit(VariableNode &vnode) {
-        values.push_back(vnode.var.get_token());
-    }
+    void ICode::visit(VariableNode &vnode) { values.push_back(vnode.var.get_token()); }
 
     void ICode::visit(AssignmentNode &anode) {
         anode.expression->accept(*this);
-        if(!values.empty()) {
+        if (!values.empty()) {
             stream << "SET " << anode.var.get_token() << ", " << values.back() << "\n";
             values.pop_back();
         }
     }
-    void ICode::visit(NumberNode &number) {
-        values.push_back(number.value.get_token());
-    }
+    void ICode::visit(NumberNode &number) { values.push_back(number.value.get_token()); }
     void ICode::visit(BinaryNode &bin_node) {
         bin_node.left->accept(*this);
         bin_node.right->accept(*this);
-        std::string right  = values.back();
+        std::string right = values.back();
         values.pop_back();
-        std::string  left = values.back();
+        std::string left = values.back();
         values.pop_back();
         std::string result = get_temp();
         if (bin_node.op.get_token() == "+")
-            stream << "ADD " << result << ", " <<  left << ", " << right  << "\n";
+            stream << "ADD " << result << ", " << left << ", " << right << "\n";
         else if (bin_node.op.get_token() == "-")
             stream << "SUB " << result << ", " << left << ", " << right << "\n";
         else if (bin_node.op.get_token() == "*")
@@ -136,7 +126,7 @@ namespace mx {
         else if (bin_node.op.get_token() == "/") {
             if (right == "0")
                 throw std::runtime_error("Error divide by zero");
-            stream << "DIV " << result << ", " << left << ", " <<  right << "\n";
+            stream << "DIV " << result << ", " << left << ", " << right << "\n";
         } else {
             throw std::runtime_error("Unknown binary operator. ");
         }
@@ -147,23 +137,21 @@ namespace mx {
         unode.value->accept(*this);
         std::string value = values.back();
         values.pop_back();
-        if(unode.op.get_token() == "-") {
+        if (unode.op.get_token() == "-") {
             std::string temp_value = get_temp();
-            stream << "NEG " << temp_value <<", " << value << "\n";
+            stream << "NEG " << temp_value << ", " << value << "\n";
             values.push_back(temp_value);
-        } else if(unode.op.get_token() == "+") {
+        } else if (unode.op.get_token() == "+") {
             values.push_back(value);
         } else {
-            throw std::runtime_error ("Unexpected unary opreator ");
+            throw std::runtime_error("Unexpected unary opreator ");
         }
     }
 
-    std::string ICode::get_temp() {
-        return "temp_" +  std::to_string(temp++);
-    }
+    std::string ICode::get_temp() { return "temp_" + std::to_string(temp++); }
 
     std::string ICode::code() {
-        if(values.size() == 1 && stream.str().empty()) {
+        if (values.size() == 1 && stream.str().empty()) {
             std::string temp = get_temp();
             stream << "CONST " << temp << ", " << values.back() << "\n";
             values.back() = temp;
@@ -180,30 +168,26 @@ namespace mx {
         stream.clear();
     }
 
-    void HTMLCode::visit(VariableNode &vnode) {
-        values.push_back(vnode.var.get_token());
-    }
+    void HTMLCode::visit(VariableNode &vnode) { values.push_back(vnode.var.get_token()); }
 
     void HTMLCode::visit(AssignmentNode &anode) {
         anode.expression->accept(*this);
-        if(!values.empty()) {
+        if (!values.empty()) {
             stream << "<b>SET</b> " << anode.var.get_token() << ", " << values.back() << "<br>\n";
             values.pop_back();
         }
     }
-    void HTMLCode::visit(NumberNode &number) {
-        values.push_back(number.value.get_token());
-    }
+    void HTMLCode::visit(NumberNode &number) { values.push_back(number.value.get_token()); }
     void HTMLCode::visit(BinaryNode &bin_node) {
         bin_node.left->accept(*this);
         bin_node.right->accept(*this);
-        std::string right  = values.back();
+        std::string right = values.back();
         values.pop_back();
-        std::string  left = values.back();
+        std::string left = values.back();
         values.pop_back();
         std::string result = get_temp();
         if (bin_node.op.get_token() == "+")
-            stream << "<b>ADD</b> " << result << ", " <<  left << ", " << right  << "<br>\n";
+            stream << "<b>ADD</b> " << result << ", " << left << ", " << right << "<br>\n";
         else if (bin_node.op.get_token() == "-")
             stream << "<b>SUB</b> " << result << ", " << left << ", " << right << "<br>\n";
         else if (bin_node.op.get_token() == "*")
@@ -211,7 +195,7 @@ namespace mx {
         else if (bin_node.op.get_token() == "/") {
             if (right == "0")
                 throw std::runtime_error("Error divide by zero");
-            stream << "<b>DIV</b> " << result << ", " << left << ", " <<  right << "<br>\n";
+            stream << "<b>DIV</b> " << result << ", " << left << ", " << right << "<br>\n";
         } else {
             throw std::runtime_error("Unknown binary operator. ");
         }
@@ -222,23 +206,21 @@ namespace mx {
         unode.value->accept(*this);
         std::string value = values.back();
         values.pop_back();
-        if(unode.op.get_token() == "-") {
+        if (unode.op.get_token() == "-") {
             std::string temp_value = get_temp();
-            stream << "<b>NEG</b> " << temp_value <<", " << value << "<br>\n";
+            stream << "<b>NEG</b> " << temp_value << ", " << value << "<br>\n";
             values.push_back(temp_value);
-        } else if(unode.op.get_token() == "+") {
+        } else if (unode.op.get_token() == "+") {
             values.push_back(value);
         } else {
-            throw std::runtime_error ("Unexpected unary opreator ");
+            throw std::runtime_error("Unexpected unary opreator ");
         }
     }
 
-    std::string HTMLCode::get_temp() {
-        return "temp_" +  std::to_string(temp++);
-    }
+    std::string HTMLCode::get_temp() { return "temp_" + std::to_string(temp++); }
 
     std::string HTMLCode::code() {
-        if(values.size() == 1 && stream.str().empty()) {
+        if (values.size() == 1 && stream.str().empty()) {
             std::string temp = get_temp();
             stream << "<b>CONST</b> " << temp << ", " << values.back() << "<br>\n";
             values.back() = temp;

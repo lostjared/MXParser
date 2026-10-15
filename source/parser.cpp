@@ -116,15 +116,16 @@ namespace mx {
         std::fstream fout;
         fout.open("out.html", std::ios::out);
 
-        if(!fout.is_open()) {
+        if (!fout.is_open()) {
             throw ParserException("Error could not open output file for writing.\n");
         }
 
-        std::vector<std::string> line_state;;
+        std::vector<std::string> line_state;
+        ;
         std::string gen_icode, gen_html_code;
         try {
-            while(index < tokens.size() - 1) {
-                if(top().get_token() == ";") {
+            while (index < tokens.size() - 1) {
+                if (top().get_token() == ";") {
                     advance();
                     continue;
                 }
@@ -134,14 +135,14 @@ namespace mx {
                 html.clear();
                 auto e = statement();
 
-                if(index < tokens.size() -1) {
-                    if(top().get_token() != ";" && top().get_token() != ",") {
+                if (index < tokens.size() - 1) {
+                    if (top().get_token() != ";" && top().get_token() != ",") {
                         throw ParserException(std::format("Error expected: ; found: {} at line: {}", top().get_token(), top().get_line()));
                     }
                 }
 
-                if(top().get_token() == ",") {
-                    if(index + 1 >= tokens.size() -1 || peek(1).get_token() == ";" || peek(1).get_token() == ",") {
+                if (top().get_token() == ",") {
+                    if (index + 1 >= tokens.size() - 1 || peek(1).get_token() == ";" || peek(1).get_token() == ",") {
                         throw ParserException("Expected statement after comma");
                     }
                 }
@@ -157,7 +158,7 @@ namespace mx {
                 gen_icode += icode.code();
                 gen_html_code += html.code();
 
-                if(top().get_token() == ";" || top().get_token() == ",") {
+                if (top().get_token() == ";" || top().get_token() == ",") {
                     advance();
                 }
             }
@@ -166,24 +167,24 @@ namespace mx {
 
             output_html(fout, gen_html_code, line_state);
 
-        } catch(std::runtime_error &e) {
-            std::cerr << "Exception: " << e.what()  << "\n";
+        } catch (std::runtime_error &e) {
+            std::cerr << "Exception: " << e.what() << "\n";
             return false;
         }
         fout.close();
-        if(!fout) {
+        if (!fout) {
             throw ParserException("Error writing to output file.");
         }
         return true;
     }
 
-     void Parser::output_html(std::ostream &out, const std::string &html, std::vector<std::string> &state) {
-         out << "<html><head><title>HTML Test</title></head><body>\n";
-         for(const auto &s : state) {
-             out << "<span style=\"color: red;\">" << html_escape(s) << "</span><br>\n";
+    void Parser::output_html(std::ostream &out, const std::string &html, std::vector<std::string> &state) {
+        out << "<html><head><title>HTML Test</title></head><body>\n";
+        for (const auto &s : state) {
+            out << "<span style=\"color: red;\">" << html_escape(s) << "</span><br>\n";
         }
-         out <<  html << "<br>";
-         out << "</body></html>";
+        out << html << "<br>";
+        out << "</body></html>";
     }
 
     bool Parser::advance() {
@@ -229,13 +230,13 @@ namespace mx {
     }
 
     std::unique_ptr<ASTNode> Parser::statement() {
-        if(top().get_type() == TOKEN_TYPE::IDENTIFIER && peek(1).get_token() == "=") {
+        if (top().get_type() == TOKEN_TYPE::IDENTIFIER && peek(1).get_token() == "=") {
             return assignment();
         }
         return expr();
     }
     std::unique_ptr<AssignmentNode> Parser::assignment() {
-        if(top().get_type() == TOKEN_TYPE::IDENTIFIER) {
+        if (top().get_type() == TOKEN_TYPE::IDENTIFIER) {
             Token var = top();
             advance();
             advance();
@@ -248,14 +249,14 @@ namespace mx {
     std::unique_ptr<ExprNode> Parser::factor() {
         Token &current = top();
 
-        if(current.get_token() == "-")  {
+        if (current.get_token() == "-") {
             Token value = current;
             advance();
             auto factor_value = factor();
             return std::make_unique<UnaryNode>(value, std::move(factor_value));
         }
 
-        if(current.get_type() == TOKEN_TYPE::IDENTIFIER) {
+        if (current.get_type() == TOKEN_TYPE::IDENTIFIER) {
             Token value = current;
             advance();
             return std::make_unique<VariableNode>(value);
