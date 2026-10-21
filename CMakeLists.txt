@@ -15,6 +15,8 @@ add_library(mxparser STATIC
     source/parser.cpp
     source/sym_tab.cpp
     source/ast.cpp
+    source/evaluate.cpp
+    source/functions.cpp
 )
 
 add_library(MXParser::mxparser ALIAS mxparser)
@@ -92,4 +94,11 @@ if(BUILD_TESTING)
     target_link_libraries(expression-tests PRIVATE mxparser MXLex::mxlex)
     target_compile_options(expression-tests PRIVATE -Wall -Wextra -pedantic)
     add_test(NAME expressions COMMAND expression-tests)
+    add_executable(function-tests tests/functions.cpp)
+    target_link_libraries(function-tests PRIVATE mxparser MXLex::mxlex)
+    target_compile_options(function-tests PRIVATE -Wall -Wextra -pedantic)
+    add_test(NAME functions COMMAND function-tests)
+    add_test(NAME function-example COMMAND parse-expr ${CMAKE_CURRENT_SOURCE_DIR}/examples/functions.c)
+    set_tests_properties(function-example PROPERTIES PASS_REGULAR_EXPRESSION "Result: 21")
+    add_test(NAME function-syntax COMMAND parse-expr --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/functions.c)
 endif()

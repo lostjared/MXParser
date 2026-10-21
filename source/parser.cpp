@@ -125,48 +125,42 @@ namespace mx {
         }
 
         std::vector<std::string> line_state;
-        ;
         std::string gen_icode, gen_html_code;
         try {
-            while (index < tokens.size() - 1) {
-                if (top().get_token() == ";") {
-                    advance();
-                    continue;
+            if (starts_type_name(index) || top().get_token() == "static" || top().get_token() == "extern" || top().get_token() == "inline") {
+                auto unit = program();
+                line_state.push_back(unit->to_string());
+                unit->accept(eval);
+                unit->accept(icode);
+                unit->accept(html);
+                if (eval.has_function("main")) {
+                    eval.call("main");
+                    if (!std::holds_alternative<std::monostate>(eval.result_value()))
+                        std::cout << "Result: " << eval.result() << "\n";
                 }
-
-                eval.clear();
-                icode.clear();
-                html.clear();
-                auto e = statement();
-
-                if (index < tokens.size() - 1) {
-                    if (top().get_token() != ";" && top().get_token() != ",") {
-                        throw ParserException(std::format("Error expected: ; found: {} at line: {}", top().get_token(), top().get_line()));
-                    }
+                gen_icode = icode.code();
+                gen_html_code = html.code();
+            } else {
+                while (top().get_type() != TOKEN_TYPE::TOKEN_NULL) {
+                    if (match(";"))
+                        continue;
+                    eval.clear();
+                    icode.clear();
+                    html.clear();
+                    auto e = statement();
+                    if (top().get_type() != TOKEN_TYPE::TOKEN_NULL)
+                        expect(";");
+                    auto representation = e->to_string();
+                    std::cout << representation << "\n";
+                    line_state.push_back(representation);
+                    e->accept(eval);
+                    e->accept(icode);
+                    e->accept(html);
+                    gen_icode += icode.code();
+                    gen_html_code += html.code();
                 }
-
-                if (top().get_token() == ",") {
-                    if (index + 1 >= tokens.size() - 1 || peek(1).get_token() == ";" || peek(1).get_token() == ",") {
-                        throw ParserException("Expected statement after comma");
-                    }
-                }
-
-                std::string string_rep = e->to_string();
-                std::cout << string_rep << "\n";
-                line_state.push_back(string_rep);
-
-                e->accept(eval);
-                e->accept(icode);
-                e->accept(html);
-
-                gen_icode += icode.code();
-                gen_html_code += html.code();
-
-                if (top().get_token() == ";" || top().get_token() == ",") {
-                    advance();
-                }
+                std::cout << "Result: " << eval.result() << "\n";
             }
-            std::cout << "Result: " << eval.result() << "\n";
             std::cout << "ICode:\n" << gen_icode << "\n";
 
             output_html(fout, gen_html_code, line_state);
@@ -541,6 +535,181 @@ namespace mx {
 
     std::unique_ptr<ExprNode> Parser::factor() { return unary(); }
     std::unique_ptr<ExprNode> Parser::term() { return binary(10); }
+
+    std::unique_ptr<ProgramNode> Parser::parse_program() {
+        if (!scan())
+            throw ParserException("Scanning failed");
+        return program();
+    }
+
+    Token Parser::identifier() {
+        Token name = top();
+        if (name.get_type() != TOKEN_TYPE::IDENTIFIER || keyword(name.get_token()) || type_names.contains(name.get_token())) {
+            throw ParserException(std::format("Expected identifier at line {}, found '{}'", name.get_line(), name.get_token()));
+        }
+        advance();
+        return name;
+    }
+
+    std::unique_ptr<ProgramNode> Parser::program() {
+        auto result = std::make_unique<ProgramNode>();
+        while (top().get_type() != TOKEN_TYPE::TOKEN_NULL) {
+            if (match(";"))
+                continue;
+            while (top().get_token() == "static" || top().get_token() == "extern" || top().get_token() == "inline")
+                advance();
+            auto type = type_name();
+            auto name = identifier();
+            if (!match("(")) {
+                result->declarations.push_back(declaration(std::move(type), name));
+                continue;
+            }
+            auto function = std::make_unique<FunctionNode>();
+            function->return_type = std::move(type);
+            function->name = name;
+            std::set<std::string> names;
+            if (top().get_token() == "void" && peek(1).get_token() == ")")
+                advance();
+            else if (top().get_token() != ")") {
+                do {
+                    Parameter parameter;
+                    parameter.type_name = type_name();
+                    if (parameter.type_name == "void")
+                        throw ParserException("A parameter cannot have type void");
+                    if (top().get_type() == TOKEN_TYPE::IDENTIFIER && !keyword(top().get_token())) {
+                        parameter.name = identifier();
+                        if (!names.insert(parameter.name.get_token()).second)
+                            throw ParserException("Duplicate parameter name");
+                    }
+                    function->parameters.push_back(std::move(parameter));
+                } while (match(","));
+            }
+            expect(")");
+            if (!match(";")) {
+                for (const auto &parameter : function->parameters) {
+                    if (parameter.name.get_type() == TOKEN_TYPE::TOKEN_NULL)
+                        throw ParserException("Function definition requires named parameters");
+                }
+                function->body = block();
+            }
+            result->declarations.push_back(std::move(function));
+        }
+        return result;
+    }
+
+    std::unique_ptr<DeclarationNode> Parser::declaration(std::string type, Token name) {
+        auto result = std::make_unique<DeclarationNode>();
+        result->type_name = std::move(type);
+        for (;;) {
+            Declarator declarator;
+            declarator.name = name;
+            if (match("="))
+                declarator.initializer = assignment_expr();
+            result->declarators.push_back(std::move(declarator));
+            if (!match(","))
+                break;
+            name = identifier();
+        }
+        expect(";");
+        return result;
+    }
+
+    std::unique_ptr<BlockNode> Parser::block() {
+        expect("{");
+        auto result = std::make_unique<BlockNode>();
+        while (!match("}")) {
+            if (top().get_type() == TOKEN_TYPE::TOKEN_NULL)
+                throw ParserException("Expected '}' before end of input");
+            result->statements.push_back(function_statement(true));
+        }
+        return result;
+    }
+
+    std::unique_ptr<ASTNode> Parser::function_statement(bool allow_declaration) {
+        if (top().get_token() == "{")
+            return block();
+        if (match(";"))
+            return std::make_unique<BlockNode>();
+        if (match("return")) {
+            auto result = std::make_unique<ReturnNode>();
+            if (top().get_token() != ";")
+                result->expression = expr();
+            expect(";");
+            return result;
+        }
+        if (match("if")) {
+            auto result = std::make_unique<IfNode>();
+            expect("(");
+            result->condition = expr();
+            expect(")");
+            result->then_statement = function_statement();
+            if (match("else"))
+                result->else_statement = function_statement();
+            return result;
+        }
+        if (match("while")) {
+            auto result = std::make_unique<WhileNode>();
+            expect("(");
+            result->condition = expr();
+            expect(")");
+            ++loop_depth;
+            try {
+                result->body = function_statement();
+            } catch (...) {
+                --loop_depth;
+                throw;
+            }
+            --loop_depth;
+            return result;
+        }
+        if (match("for")) {
+            auto result = std::make_unique<ForNode>();
+            expect("(");
+            if (starts_type_name(index)) {
+                auto type = type_name();
+                auto name = identifier();
+                result->initializer = declaration(std::move(type), name);
+            } else {
+                if (top().get_token() != ";")
+                    result->initializer = expr();
+                expect(";");
+            }
+            if (top().get_token() != ";")
+                result->condition = expr();
+            expect(";");
+            if (top().get_token() != ")")
+                result->update = expr();
+            expect(")");
+            ++loop_depth;
+            try {
+                result->body = function_statement();
+            } catch (...) {
+                --loop_depth;
+                throw;
+            }
+            --loop_depth;
+            return result;
+        }
+        if (top().get_token() == "break" || top().get_token() == "continue") {
+            if (!loop_depth)
+                throw ParserException("break/continue requires an enclosing loop");
+            auto result = std::make_unique<JumpNode>();
+            result->is_break = top().get_token() == "break";
+            advance();
+            expect(";");
+            return result;
+        }
+        if (starts_type_name(index)) {
+            if (!allow_declaration)
+                throw ParserException("A declaration requires a block");
+            auto type = type_name();
+            auto name = identifier();
+            return declaration(std::move(type), name);
+        }
+        auto result = expr();
+        expect(";");
+        return result;
+    }
 
     void Parser::error_message(const std::string &message, int line) { std::println("MXParser: Error: {} on Line: {}", message, line); }
 } // namespace mx

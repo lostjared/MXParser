@@ -119,9 +119,10 @@ Supported syntax includes:
   registered typedef names, qualifiers, and pointer types.
 
 This is expression syntax parsing, without name resolution or type/lvalue
-checking. Declarations, preprocessing, compound literals, `_Generic`, complex
-and atomic type specifiers, and array/function abstract declarators in type
-names are not implemented.
+checking. Preprocessing, compound literals, `_Generic`, complex and atomic
+type specifiers, and array/function abstract declarators in type names are not
+implemented. Numeric declarations and function bodies are supported through
+`parse_program()`, described below.
 
 Try the syntax parser from either build system:
 
@@ -129,15 +130,66 @@ Try the syntax parser from either build system:
 ./build/cmake/parse-expr --syntax expressions.c
 ```
 
-The existing `parse()` API and `parse-expr filename` mode still evaluate
-expressions and emit intermediate code plus `out.html`. Their evaluator uses
-signed 64-bit integers and supports integer operators, variable assignments,
-increments, and short-circuit `&&`, `||`, and `?:`. Calls, pointers, member
-access, casts, `sizeof`, and non-integer literals require a custom AST visitor;
-the built-in visitors report unsupported operations. New visitor overloads
-have throwing defaults so existing visitors remain source-compatible.
+The `parse()` API and `parse-expr filename` mode evaluate expressions and emit
+intermediate code plus `out.html`. For a file containing declarations and
+functions, they load the program and call `main()` when it is defined.
+New visitor overloads have throwing defaults so existing visitors remain
+source-compatible.
 
-Run the expression regression tests with:
+## Functions and floating-point arithmetic
+
+`parse_program()` returns a program AST containing function prototypes,
+definitions, and global numeric declarations. Function bodies support local
+numeric declarations (including multiple declarators), nested blocks, `return`,
+`if`/`else`, `while`, `for`, `break`, `continue`, and expression statements.
+Functions support typed parameters and return values, recursion, forward calls,
+and separate local scopes. Use `(void)` or `()` for a function without parameters.
+
+For example, [examples/functions.c](examples/functions.c) combines a
+floating-point average function with a recursive factorial function:
+
+```bash
+./build/cmake/parse-expr examples/functions.c
+# Result: 21, followed by intermediate code; also writes out.html
+./build/cmake/parse-expr --syntax-program examples/functions.c
+```
+
+To call a parsed function directly:
+
+```cpp
+std::istringstream input("double half(double x) { return x / 2.0; }");
+mx::Parser parser(input);
+auto program = parser.parse_program();
+mx::Evaluate evaluator;
+program->accept(evaluator);
+evaluator.call("half", {5.0});
+std::cout << evaluator.result() << '\n'; // 2.5
+```
+
+Keep the program AST alive while using its functions. `clear()` clears the
+result stack while preserving variables and registered functions. `result()`
+now returns `long double` to expose fractional results; `result_value()` returns
+a `NumericValue` variant holding `int64_t`, `double`, or `monostate` for void.
+
+The evaluator retains integer arithmetic for integer operands (`5 / 2 == 2`)
+and promotes mixed arithmetic to floating point (`5 / 2.0 == 2.5`). It supports
+floating assignments, compound assignments, increments, comparisons, unary
+operators, numeric casts, and short-circuit `&&`, `||`, and `?:`. Remainder,
+bitwise operators, and shifts require integer operands. Numeric parameters,
+returns, and assignments convert to their declared type; float conversions
+round through C++ `float`. Integer overflow, division by zero, invalid calls,
+and use of uninitialized locals report runtime errors.
+
+This is a numeric C interpreter subset. Integer types use signed 64-bit storage
+without C's distinct integer widths or unsigned arithmetic. Floating arithmetic
+uses `double`, including `long double` declarations and `L` literals; this is
+not a complete implementation of C's type system. Character/string evaluation,
+pointer operations, `sizeof` evaluation, arrays, structs, function pointers,
+variadic functions, external/library calls, preprocessing, `switch`, `do`/`while`,
+and `goto` remain unsupported. Function recursion is limited to 256 frames.
+The emitted intermediate code is illustrative and is not a native C backend.
+
+Run the expression and function regression tests with:
 
 ```bash
 cmake -S . -B build/cmake -DBUILD_TESTING=ON

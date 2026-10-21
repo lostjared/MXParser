@@ -29,6 +29,8 @@ namespace mx {
         Parser(std::istream &stream) : scanner{stream}, error_count{0} {}
         bool scan();
         bool parse();
+        /** Parse numeric C function definitions, prototypes, and global declarations. */
+        std::unique_ptr<ProgramNode> parse_program();
         /** Parse a single C expression, allowing one trailing semicolon. */
         std::unique_ptr<ExprNode> parse_expression();
         /** Parse semicolon-separated C expressions without evaluating them. */
@@ -66,6 +68,12 @@ namespace mx {
         void expect(const std::string &text);
         bool starts_type_name(size_t position) const;
         std::string type_name();
+        std::unique_ptr<ProgramNode> program();
+        std::unique_ptr<BlockNode> block();
+        std::unique_ptr<ASTNode> function_statement(bool allow_declaration = false);
+        std::unique_ptr<DeclarationNode> declaration(std::string type, Token name);
+        Token identifier();
+        size_t loop_depth = 0;
         std::set<std::string> type_names;
     };
 } // namespace mx
