@@ -85,3 +85,11 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/mxparser
 )
 
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(expression-tests tests/expressions.cpp)
+    target_link_libraries(expression-tests PRIVATE mxparser MXLex::mxlex)
+    target_compile_options(expression-tests PRIVATE -Wall -Wextra -pedantic)
+    add_test(NAME expressions COMMAND expression-tests)
+endif()

@@ -6,6 +6,7 @@
 #include <format>
 #include <memory>
 #include <print>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -28,6 +29,12 @@ namespace mx {
         Parser(std::istream &stream) : scanner{stream}, error_count{0} {}
         bool scan();
         bool parse();
+        /** Parse a single C expression, allowing one trailing semicolon. */
+        std::unique_ptr<ExprNode> parse_expression();
+        /** Parse semicolon-separated C expressions without evaluating them. */
+        std::vector<std::unique_ptr<ExprNode>> parse_expressions();
+        /** Register a typedef name for cast and sizeof disambiguation. */
+        void add_type_name(const std::string &name);
         void error_message(const std::string &message, int line);
         void print_tokens(std::ostream &out);
         void output_html(std::ostream &out, const std::string &html, std::vector<std::string> &state);
@@ -48,5 +55,17 @@ namespace mx {
         std::unique_ptr<ExprNode> factor();
         std::unique_ptr<ExprNode> term();
         std::unique_ptr<ExprNode> expr();
+        std::unique_ptr<ExprNode> assignment_expr();
+        std::unique_ptr<ExprNode> conditional();
+        std::unique_ptr<ExprNode> binary(int min_precedence);
+        std::unique_ptr<ExprNode> cast();
+        std::unique_ptr<ExprNode> unary();
+        std::unique_ptr<ExprNode> postfix();
+        std::unique_ptr<ExprNode> primary();
+        bool match(const std::string &text);
+        void expect(const std::string &text);
+        bool starts_type_name(size_t position) const;
+        std::string type_name();
+        std::set<std::string> type_names;
     };
 } // namespace mx
