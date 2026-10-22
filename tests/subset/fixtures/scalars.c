@@ -1,0 +1,10 @@
+unsigned char a;
+signed short b;
+unsigned int c;
+long d;
+unsigned long long e;
+_Bool flag;
+float f;
+double g;
+long double h;
+const volatile int k = 1;

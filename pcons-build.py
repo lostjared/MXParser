@@ -127,6 +127,7 @@ mxparser = project.StaticLibrary(
         project_dir / "source" / "ast.cpp",
         project_dir / "source" / "evaluate.cpp",
         project_dir / "source" / "functions.cpp",
+        project_dir / "source" / "type.cpp",
     ],
 )
 mxparser.public.include_dirs.append(project_dir)

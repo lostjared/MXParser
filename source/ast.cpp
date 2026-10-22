@@ -48,8 +48,8 @@ namespace mx {
     }
     std::string SubscriptNode::to_string() const { return "(" + base->to_string() + ")[" + subscript->to_string() + "]"; }
     std::string MemberNode::to_string() const { return "(" + base->to_string() + ")" + op.get_token() + member.get_token(); }
-    std::string CastNode::to_string() const { return "(" + type_name + ")(" + value->to_string() + ")"; }
-    std::string SizeofNode::to_string() const { return "sizeof(" + (value ? value->to_string() : type_name) + ")"; }
+    std::string CastNode::to_string() const { return "(" + declared_type()->to_string() + ")(" + value->to_string() + ")"; }
+    std::string SizeofNode::to_string() const { return "sizeof(" + (value ? value->to_string() : declared_type()->to_string()) + ")"; }
 
     namespace {
         bool is_assignment(const std::string &op) { return op == "=" || op == "+=" || op == "-=" || op == "*=" || op == "/=" || op == "%=" || op == "<<=" || op == ">>=" || op == "&=" || op == "^=" || op == "|="; }

@@ -5,6 +5,7 @@
 #include <MXLex/token.hpp>
 #include <format>
 #include <memory>
+#include <optional>
 #include <print>
 #include <set>
 #include <stdexcept>
@@ -20,6 +21,8 @@ namespace mx {
     class ParserException : public std::runtime_error {
       public:
         ParserException(const std::string &msg) : runtime_error(msg) {}
+        ParserException(const std::string &message, SourceLocation location) : runtime_error(std::format("{} at line {}, found '{}'", message, location.line, location.token)), location(std::move(location)) {}
+        SourceLocation location;
     };
 
     class ParserEOF {};
@@ -52,6 +55,9 @@ namespace mx {
         size_t error_count = 0;
         size_t index = 0;
         std::vector<Token> tokens;
+        std::optional<ParserException> scan_failure;
+        [[noreturn]] void fail(const std::string &message);
+        [[noreturn]] void fail_at(const Token &token, const std::string &message);
         std::unique_ptr<ASTNode> statement();
         std::unique_ptr<AssignmentNode> assignment();
         std::unique_ptr<ExprNode> factor();
@@ -67,11 +73,11 @@ namespace mx {
         bool match(const std::string &text);
         void expect(const std::string &text);
         bool starts_type_name(size_t position) const;
-        std::string type_name();
+        TypePtr type_name();
         std::unique_ptr<ProgramNode> program();
         std::unique_ptr<BlockNode> block();
         std::unique_ptr<ASTNode> function_statement(bool allow_declaration = false);
-        std::unique_ptr<DeclarationNode> declaration(std::string type, Token name);
+        std::unique_ptr<DeclarationNode> declaration(TypePtr type, Token name, SourceLocation location);
         Token identifier();
         size_t loop_depth = 0;
         std::set<std::string> type_names;

@@ -233,6 +233,11 @@ until the final optional step. Document support separately for each capability.
      constructs have an expected diagnostic, with no implied runtime support.
 
 2. **Introduce structured types and source locations.**
+   Status: complete. Parsed types now use the shared model in
+   [MXParser/type.hpp](MXParser/type.hpp). AST nodes and parser exceptions carry
+   source locations; see [the API notes](docs/c-subset.md#structured-types-and-source-locations).
+   CTest covers type structure, lexer coverage, and diagnostic locations.
+
    - Replace type strings as the internal representation with scalar, qualified,
      pointer, array, function, and tagged types. Keep printable type names for
      AST output and compatibility where needed.

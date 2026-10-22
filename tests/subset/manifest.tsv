@@ -1,0 +1,66 @@
+# file	step	current_parse	target_parse	target_validation	target_diagnostic
+fixtures/expressions.c	2	accept	accept	accept	-
+fixtures/literals.c	6	accept	accept	accept	-
+fixtures/scalars.c	2	accept	accept	accept	-
+fixtures/numeric-program.c	1	accept	accept	accept	-
+fixtures/dangling-else.c	5	accept	accept	accept	-
+fixtures/mixed-declarators.c	3	accept	accept	accept	-
+fixtures/declarators.c	3	reject	accept	accept	-
+fixtures/abstract-types.c	3	reject	accept	accept	-
+fixtures/array-parameter.c	3	reject	accept	accept	-
+fixtures/typedef-scope.c	3	reject	accept	accept	-
+fixtures/storage.c	3	accept	accept	accept	-
+fixtures/structured-statements.c	5	reject	accept	accept	-
+fixtures/aggregates.c	6	reject	accept	accept	-
+fixtures/initializers.c	6	reject	accept	accept	-
+fixtures/combined.c	7	reject	accept	accept	-
+fixtures/missing-semicolon.c	2	reject	reject	reject	expected semicolon with offending token and line
+fixtures/unexpected-eof.c	2	reject	reject	reject	expected closing brace at end of input with line
+fixtures/bad-type.c	2	reject	reject	reject	invalid combination of type specifiers
+fixtures/bad-declarator.c	3	reject	reject	reject	expected closing parenthesis in declarator
+fixtures/bad-typedef.c	3	reject	reject	reject	typedef name is not visible outside its block
+fixtures/invalid-lvalue.c	4	accept	accept	reject	assignment requires a modifiable lvalue
+fixtures/bad-operands.c	4	accept	accept	reject	remainder requires integer operands
+fixtures/const-write.c	4	accept	accept	reject	cannot modify a const object
+fixtures/bad-restrict.c	4	accept	accept	reject	restrict requires a pointer to an object type
+fixtures/undeclared-name.c	4	accept	accept	reject	undeclared identifier in an unexecuted branch
+fixtures/duplicate-local.c	4	accept	accept	reject	duplicate object declaration in the same block
+fixtures/prototype-conflict.c	4	accept	accept	reject	incompatible function return types
+fixtures/bad-call.c	4	accept	accept	reject	function call argument count does not match prototype
+fixtures/bad-return.c	4	accept	accept	reject	void function must not return a value
+fixtures/bad-storage.c	4	accept	accept	reject	conflicting storage classes static and extern
+fixtures/bad-break.c	5	reject	accept	reject	break requires an enclosing loop or switch
+fixtures/bad-continue.c	5	reject	accept	reject	continue requires an enclosing loop
+fixtures/bad-case.c	5	reject	accept	reject	case requires an enclosing switch
+fixtures/duplicate-case.c	5	reject	accept	reject	duplicate case value after conversion
+fixtures/duplicate-default.c	5	reject	accept	reject	multiple defaults in one switch
+fixtures/switch-continue.c	5	reject	accept	reject	continue in a switch still requires an enclosing loop
+fixtures/unknown-member.c	6	reject	accept	reject	struct has no member named missing
+fixtures/incomplete-object.c	6	accept	accept	reject	object has incomplete struct type
+fixtures/recursive-object.c	6	reject	accept	reject	struct cannot contain itself by value
+fixtures/bad-bound.c	6	reject	accept	reject	array bound must be positive
+fixtures/nonconstant-bound.c	6	reject	accept	reject	variable length arrays are unsupported
+fixtures/bad-initializer.c	6	reject	accept	reject	too many elements in array initializer
+fixtures/excluded-union.c	7	reject	reject	reject	unsupported feature: union
+fixtures/excluded-bit-field.c	7	reject	reject	reject	unsupported feature: bit field
+fixtures/excluded-function-pointer.c	7	reject	reject	reject	unsupported feature: function pointer
+fixtures/excluded-variadic.c	7	reject	reject	reject	unsupported feature: variadic
+fixtures/excluded-compound-literal.c	7	reject	reject	reject	unsupported feature: compound literal
+fixtures/excluded-designated-initializer.c	7	reject	reject	reject	unsupported feature: designated initializer
+fixtures/excluded-goto.c	7	reject	reject	reject	unsupported feature: goto
+fixtures/excluded-preprocessor.c	7	reject	reject	reject	unsupported feature: preprocessor
+fixtures/excluded-atomic.c	7	accept	reject	reject	unsupported feature: atomic
+fixtures/excluded-complex.c	7	reject	reject	reject	unsupported feature: complex
+fixtures/excluded-generic.c	7	reject	reject	reject	unsupported feature: generic
+fixtures/excluded-static-local.c	7	reject	reject	reject	unsupported feature: static local
+fixtures/excluded-inline.c	7	accept	reject	reject	unsupported feature: inline
+fixtures/excluded-old-style.c	7	reject	reject	reject	unsupported feature: old style
+fixtures/excluded-flexible-array.c	7	reject	reject	reject	unsupported feature: flexible array
+fixtures/excluded-wide-literal.c	7	accept	reject	reject	unsupported feature: wide literal
+fixtures/excluded-brace-elision.c	7	reject	reject	reject	unsupported feature: brace elision
+fixtures/excluded-auto.c	7	reject	reject	reject	unsupported feature: auto
+fixtures/excluded-register.c	7	reject	reject	reject	unsupported feature: register
+fixtures/excluded-extern-local.c	7	reject	reject	reject	unsupported feature: extern local
+fixtures/excluded-enum-forward.c	7	reject	reject	reject	unsupported feature: enum forward
+fixtures/excluded-address-initializer.c	7	accept	reject	reject	unsupported feature: address initializer
+fixtures/excluded-aggregate-copy-initializer.c	7	reject	reject	reject	unsupported feature: aggregate copy initializer

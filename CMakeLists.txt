@@ -17,6 +17,7 @@ add_library(mxparser STATIC
     source/ast.cpp
     source/evaluate.cpp
     source/functions.cpp
+    source/type.cpp
 )
 
 add_library(MXParser::mxparser ALIAS mxparser)
@@ -58,8 +59,8 @@ install(TARGETS mxparser
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(DIRECTORY mxparser/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/mxparser
+install(DIRECTORY MXParser/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/MXParser
     FILES_MATCHING PATTERN "*.hpp"
 )
 
@@ -98,6 +99,10 @@ if(BUILD_TESTING)
     target_link_libraries(function-tests PRIVATE mxparser MXLex::mxlex)
     target_compile_options(function-tests PRIVATE -Wall -Wextra -pedantic)
     add_test(NAME functions COMMAND function-tests)
+    add_executable(type-source-tests tests/types.cpp)
+    target_link_libraries(type-source-tests PRIVATE mxparser MXLex::mxlex)
+    target_compile_options(type-source-tests PRIVATE -Wall -Wextra -pedantic)
+    add_test(NAME types-and-source COMMAND type-source-tests)
     add_executable(subset-tests tests/subset.cpp)
     target_link_libraries(subset-tests PRIVATE mxparser MXLex::mxlex)
     target_compile_options(subset-tests PRIVATE -Wall -Wextra -pedantic)

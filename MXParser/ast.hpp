@@ -1,5 +1,7 @@
 #pragma once
 
+#include "MXParser/source.hpp"
+#include "MXParser/type.hpp"
 #include <MXLex/token.hpp>
 #include <cstdint>
 #include <iostream>
@@ -9,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -66,18 +69,21 @@ namespace mx {
 
     class ASTNode {
       public:
+        ASTNode(SourceLocation location = {}) : location(std::move(location)) {}
         virtual ~ASTNode() = default;
+        SourceLocation location;
         virtual void accept(ASTVisitor &visitor) = 0;
         virtual std::string to_string() const = 0;
     };
 
     class ExprNode : public ASTNode {
       public:
+        using ASTNode::ASTNode;
     };
 
     class NumberNode : public ExprNode {
       public:
-        NumberNode(const Token &value) : value(value) {}
+        NumberNode(const Token &value) : ExprNode(SourceLocation::from_token(value)), value(value) {}
         Token value;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override;
@@ -85,7 +91,7 @@ namespace mx {
 
     class UnaryNode : public ExprNode {
       public:
-        UnaryNode(const Token &op, std::unique_ptr<ExprNode> value, bool postfix = false) : op(op), value(std::move(value)), postfix(postfix) {}
+        UnaryNode(const Token &op, std::unique_ptr<ExprNode> value, bool postfix = false) : ExprNode(postfix ? value->location : SourceLocation::from_token(op)), op(op), value(std::move(value)), postfix(postfix) {}
         Token op;
         std::unique_ptr<ExprNode> value;
         bool postfix = false;
@@ -95,7 +101,7 @@ namespace mx {
 
     class BinaryNode : public ExprNode {
       public:
-        BinaryNode(std::unique_ptr<ExprNode> left, const Token &op, std::unique_ptr<ExprNode> right) : left(std::move(left)), op(op), right(std::move(right)) {}
+        BinaryNode(std::unique_ptr<ExprNode> left, const Token &op, std::unique_ptr<ExprNode> right) : ExprNode(left->location), left(std::move(left)), op(op), right(std::move(right)) {}
         std::unique_ptr<ExprNode> left;
         Token op;
         std::unique_ptr<ExprNode> right;
@@ -105,7 +111,7 @@ namespace mx {
 
     class VariableNode : public ExprNode {
       public:
-        VariableNode(const Token &type) : var(type) {}
+        VariableNode(const Token &type) : ExprNode(SourceLocation::from_token(type)), var(type) {}
         Token var;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override { return var.get_token(); }
@@ -113,7 +119,7 @@ namespace mx {
 
     class AssignmentNode : public ASTNode {
       public:
-        AssignmentNode(const Token &var, std::unique_ptr<ExprNode> expression) : var(var), expression(std::move(expression)) {}
+        AssignmentNode(const Token &var, std::unique_ptr<ExprNode> expression) : ASTNode(SourceLocation::from_token(var)), var(var), expression(std::move(expression)) {}
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override { return var.get_token() + "=" + expression->to_string(); }
         Token var;
@@ -122,7 +128,7 @@ namespace mx {
 
     class LiteralNode : public ExprNode {
       public:
-        LiteralNode(const Token &value) : value(value) {}
+        LiteralNode(const Token &value) : ExprNode(SourceLocation::from_token(value)), value(value) {}
         Token value;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override { return value.get_token(); }
@@ -130,7 +136,7 @@ namespace mx {
 
     class ConditionalNode : public ExprNode {
       public:
-        ConditionalNode(std::unique_ptr<ExprNode> condition, std::unique_ptr<ExprNode> then_expr, std::unique_ptr<ExprNode> else_expr) : condition(std::move(condition)), then_expr(std::move(then_expr)), else_expr(std::move(else_expr)) {}
+        ConditionalNode(std::unique_ptr<ExprNode> condition, std::unique_ptr<ExprNode> then_expr, std::unique_ptr<ExprNode> else_expr) : ExprNode(condition->location), condition(std::move(condition)), then_expr(std::move(then_expr)), else_expr(std::move(else_expr)) {}
         std::unique_ptr<ExprNode> condition, then_expr, else_expr;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override;
@@ -138,7 +144,7 @@ namespace mx {
 
     class CallNode : public ExprNode {
       public:
-        CallNode(std::unique_ptr<ExprNode> callee, std::vector<std::unique_ptr<ExprNode>> arguments) : callee(std::move(callee)), arguments(std::move(arguments)) {}
+        CallNode(std::unique_ptr<ExprNode> callee, std::vector<std::unique_ptr<ExprNode>> arguments) : ExprNode(callee->location), callee(std::move(callee)), arguments(std::move(arguments)) {}
         std::unique_ptr<ExprNode> callee;
         std::vector<std::unique_ptr<ExprNode>> arguments;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
@@ -147,7 +153,7 @@ namespace mx {
 
     class SubscriptNode : public ExprNode {
       public:
-        SubscriptNode(std::unique_ptr<ExprNode> base, std::unique_ptr<ExprNode> subscript) : base(std::move(base)), subscript(std::move(subscript)) {}
+        SubscriptNode(std::unique_ptr<ExprNode> base, std::unique_ptr<ExprNode> subscript) : ExprNode(base->location), base(std::move(base)), subscript(std::move(subscript)) {}
         std::unique_ptr<ExprNode> base, subscript;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override;
@@ -155,7 +161,7 @@ namespace mx {
 
     class MemberNode : public ExprNode {
       public:
-        MemberNode(std::unique_ptr<ExprNode> base, const Token &op, const Token &member) : base(std::move(base)), op(op), member(member) {}
+        MemberNode(std::unique_ptr<ExprNode> base, const Token &op, const Token &member) : ExprNode(base->location), base(std::move(base)), op(op), member(member) {}
         std::unique_ptr<ExprNode> base;
         Token op, member;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
@@ -164,8 +170,11 @@ namespace mx {
 
     class CastNode : public ExprNode {
       public:
-        CastNode(std::string type_name, std::unique_ptr<ExprNode> value) : type_name(std::move(type_name)), value(std::move(value)) {}
+        CastNode(std::string type_name, std::unique_ptr<ExprNode> value) : CastNode(Type::from_name(type_name), std::move(value)) {}
+        CastNode(TypePtr type, std::unique_ptr<ExprNode> value) : ExprNode(value->location), type_name(type->to_string()), type(std::move(type)), value(std::move(value)) {}
+        TypePtr declared_type() const { return type ? type : Type::from_name(type_name); }
         std::string type_name;
+        TypePtr type;
         std::unique_ptr<ExprNode> value;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override;
@@ -173,17 +182,23 @@ namespace mx {
 
     class SizeofNode : public ExprNode {
       public:
-        SizeofNode(std::unique_ptr<ExprNode> value) : value(std::move(value)) {}
-        SizeofNode(std::string type_name) : type_name(std::move(type_name)) {}
+        SizeofNode(std::unique_ptr<ExprNode> value) : ExprNode(value->location), value(std::move(value)) {}
+        SizeofNode(std::string type_name) : SizeofNode(Type::from_name(type_name)) {}
+        SizeofNode(TypePtr type) : type_name(type->to_string()), type(std::move(type)) {}
+        TypePtr declared_type() const { return type ? type : Type::from_name(type_name); }
         std::unique_ptr<ExprNode> value;
         std::string type_name;
+        TypePtr type;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override;
     };
 
     struct Parameter {
+        TypePtr declared_type() const { return type ? type : Type::from_name(type_name); }
         std::string type_name;
         Token name;
+        TypePtr type;
+        SourceLocation location;
     };
 
     class BlockNode : public ASTNode {
@@ -196,6 +211,16 @@ namespace mx {
     class FunctionNode : public ASTNode {
       public:
         std::string return_type;
+        TypePtr type;
+        TypePtr result_type() const { return type ? type->element : Type::from_name(return_type); }
+        TypePtr signature_type() const {
+            if (type)
+                return type;
+            std::vector<TypePtr> types;
+            for (const auto &parameter : parameters)
+                types.push_back(parameter.declared_type());
+            return Type::function(result_type(), std::move(types));
+        }
         Token name;
         std::vector<Parameter> parameters;
         std::unique_ptr<BlockNode> body;
@@ -220,11 +245,15 @@ namespace mx {
     struct Declarator {
         Token name;
         std::unique_ptr<ExprNode> initializer;
+        TypePtr type;
+        SourceLocation location;
     };
 
     class DeclarationNode : public ASTNode {
       public:
+        TypePtr declared_type() const { return type ? type : Type::from_name(type_name); }
         std::string type_name;
+        TypePtr type;
         std::vector<Declarator> declarators;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override;
@@ -295,7 +324,7 @@ namespace mx {
       private:
         struct Binding {
             NumericValue value;
-            std::string type_name;
+            TypePtr type;
         };
         using Scope = std::unordered_map<std::string, Binding>;
         struct Frame {

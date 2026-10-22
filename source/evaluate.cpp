@@ -29,32 +29,25 @@ namespace mx {
         NumericValue boolean(bool value) { return std::int64_t(value); }
 
         enum class Scalar { Void, Integer, Float, Double };
-        Scalar scalar_type(const std::string &type) {
-            std::istringstream input(type);
-            std::string word;
-            Scalar result = Scalar::Integer;
-            while (input >> word) {
-                if (word == "void")
-                    result = Scalar::Void;
-                else if (word == "float")
-                    result = Scalar::Float;
-                else if (word == "double")
-                    result = Scalar::Double;
-                else if (word != "char" && word != "short" && word != "int" && word != "long" && word != "signed" && word != "unsigned" && word != "_Bool" && word != "const" && word != "volatile" && word != "restrict") {
-                    throw std::runtime_error("Evaluator does not support type: " + type);
-                }
+        Scalar scalar_type(const TypePtr &type) {
+            if (!type)
+                throw std::runtime_error("Missing evaluator type");
+            const auto &base = type->unqualified();
+            if (base.kind != TypeKind::Scalar || type->qualifiers.is_atomic)
+                throw std::runtime_error("Evaluator does not support type: " + type->to_string());
+            switch (base.scalar) {
+            case ScalarKind::Void:
+                return Scalar::Void;
+            case ScalarKind::Float:
+                return Scalar::Float;
+            case ScalarKind::Double:
+            case ScalarKind::LongDouble:
+                return Scalar::Double;
+            default:
+                return Scalar::Integer;
             }
-            return result;
         }
-        bool is_const(const std::string &type) {
-            std::istringstream input(type);
-            std::string word;
-            while (input >> word)
-                if (word == "const")
-                    return true;
-            return false;
-        }
-        NumericValue convert(const NumericValue &value, const std::string &type) {
+        NumericValue convert(const NumericValue &value, const TypePtr &type) {
             auto kind = scalar_type(type);
             if (kind == Scalar::Void)
                 return std::monostate{};
@@ -63,7 +56,7 @@ namespace mx {
                 return static_cast<double>(static_cast<float>(numeric));
             if (kind == Scalar::Double)
                 return static_cast<double>(numeric);
-            if (type.find("_Bool") != std::string::npos)
+            if (type->unqualified().scalar == ScalarKind::Bool)
                 return boolean(truth(value));
             if (integral(value))
                 return value;
@@ -189,13 +182,13 @@ namespace mx {
     void Evaluate::store(const std::string &name, NumericValue value) {
         number(value);
         if (auto *binding = lookup(name)) {
-            if (is_const(binding->type_name))
+            if (binding->type && binding->type->qualifiers.is_const)
                 throw std::runtime_error("Cannot assign const variable: " + name);
-            binding->value = binding->type_name.empty() ? value : convert(value, binding->type_name);
+            binding->value = binding->type ? convert(value, binding->type) : value;
         } else {
             if (!frames.empty())
                 throw std::runtime_error("Undeclared variable: " + name);
-            globals[name] = {value, ""};
+            globals[name] = {value, {}};
         }
     }
     void Evaluate::visit(NumberNode &node) {
@@ -295,13 +288,13 @@ namespace mx {
             auto *binding = lookup(variable->var.get_token());
             if (!binding)
                 return false;
-            if (binding->type_name.empty())
+            if (!binding->type)
                 return std::holds_alternative<double>(binding->value);
-            auto kind = scalar_type(binding->type_name);
+            auto kind = scalar_type(binding->type);
             return kind == Scalar::Float || kind == Scalar::Double;
         }
         if (auto *cast = dynamic_cast<CastNode *>(&expression)) {
-            auto kind = scalar_type(cast->type_name);
+            auto kind = scalar_type(cast->declared_type());
             return kind == Scalar::Float || kind == Scalar::Double;
         }
         if (auto *call = dynamic_cast<CallNode *>(&expression)) {
@@ -309,7 +302,7 @@ namespace mx {
             auto function = callee ? functions.find(callee->var.get_token()) : functions.end();
             if (function == functions.end())
                 return false;
-            auto kind = scalar_type(function->second->return_type);
+            auto kind = scalar_type(function->second->result_type());
             return kind == Scalar::Float || kind == Scalar::Double;
         }
         if (auto *conditional = dynamic_cast<ConditionalNode *>(&expression))
@@ -335,7 +328,7 @@ namespace mx {
         store(node.var.get_token(), value);
         values.push_back(lookup(node.var.get_token())->value);
     }
-    void Evaluate::visit(CastNode &node) { values.push_back(convert(evaluate(*node.value), node.type_name)); }
+    void Evaluate::visit(CastNode &node) { values.push_back(convert(evaluate(*node.value), node.declared_type())); }
     void Evaluate::visit(CallNode &node) {
         auto *callee = dynamic_cast<VariableNode *>(node.callee.get());
         if (!callee)
@@ -359,9 +352,9 @@ namespace mx {
         }
     }
     void Evaluate::visit(FunctionNode &node) {
-        scalar_type(node.return_type);
+        scalar_type(node.result_type());
         for (auto &parameter : node.parameters) {
-            if (scalar_type(parameter.type_name) == Scalar::Void)
+            if (scalar_type(parameter.declared_type()) == Scalar::Void)
                 throw std::runtime_error("Void parameter");
         }
         auto name = node.name.get_token();
@@ -370,9 +363,9 @@ namespace mx {
         auto found = functions.find(name);
         if (found != functions.end()) {
             auto *previous = found->second;
-            bool compatible = scalar_type(previous->return_type) == scalar_type(node.return_type) && previous->parameters.size() == node.parameters.size();
+            bool compatible = scalar_type(previous->result_type()) == scalar_type(node.result_type()) && previous->parameters.size() == node.parameters.size();
             for (size_t i = 0; compatible && i < node.parameters.size(); ++i)
-                compatible = scalar_type(previous->parameters[i].type_name) == scalar_type(node.parameters[i].type_name);
+                compatible = scalar_type(previous->parameters[i].declared_type()) == scalar_type(node.parameters[i].declared_type());
             if (!compatible)
                 throw std::runtime_error("Conflicting function declaration: " + name);
             if (previous->body && node.body)
@@ -395,7 +388,7 @@ namespace mx {
         frame.scopes.emplace_back();
         for (size_t i = 0; i < arguments.size(); ++i) {
             const auto &parameter = function->parameters[i];
-            frame.scopes.back()[parameter.name.get_token()] = {convert(arguments[i], parameter.type_name), parameter.type_name};
+            frame.scopes.back()[parameter.name.get_token()] = {convert(arguments[i], parameter.declared_type()), parameter.declared_type()};
         }
         frames.push_back(std::move(frame));
         NumericValue result;
@@ -413,7 +406,7 @@ namespace mx {
             throw;
         }
         frames.pop_back();
-        auto type = scalar_type(function->return_type);
+        auto type = scalar_type(function->result_type());
         if (type == Scalar::Void) {
             if (returned && !std::holds_alternative<std::monostate>(result))
                 throw std::runtime_error("Void function returned a value: " + name);
@@ -423,7 +416,7 @@ namespace mx {
             result = std::int64_t(0);
         else if (!returned || std::holds_alternative<std::monostate>(result))
             throw std::runtime_error("Missing return value in " + name);
-        return convert(result, function->return_type);
+        return convert(result, function->result_type());
     }
     void Evaluate::visit(BlockNode &node) {
         if (frames.empty())
@@ -439,16 +432,16 @@ namespace mx {
         frames.back().scopes.pop_back();
     }
     void Evaluate::visit(DeclarationNode &node) {
-        if (scalar_type(node.type_name) == Scalar::Void)
+        if (scalar_type(node.declared_type()) == Scalar::Void)
             throw std::runtime_error("Variable cannot have type void");
         for (auto &declarator : node.declarators) {
             auto name = declarator.name.get_token();
             auto &scope = frames.empty() ? globals : frames.back().scopes.back();
             if (scope.contains(name) || (frames.empty() && functions.contains(name)))
                 throw std::runtime_error("Duplicate declaration: " + name);
-            scope[name] = {frames.empty() ? convert(std::int64_t(0), node.type_name) : NumericValue(std::monostate{}), node.type_name};
+            scope[name] = {frames.empty() ? convert(std::int64_t(0), node.declared_type()) : NumericValue(std::monostate{}), node.declared_type()};
             if (declarator.initializer) {
-                auto value = convert(evaluate(*declarator.initializer), node.type_name);
+                auto value = convert(evaluate(*declarator.initializer), node.declared_type());
                 lookup(name)->value = value;
             }
         }

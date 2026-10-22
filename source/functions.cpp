@@ -28,11 +28,11 @@ namespace mx {
         return result + "}";
     }
     std::string FunctionNode::to_string() const {
-        std::string result = return_type + " " + name.get_token() + "(";
+        std::string result = result_type()->to_string() + " " + name.get_token() + "(";
         for (size_t i = 0; i < parameters.size(); ++i) {
             if (i)
                 result += ", ";
-            result += parameters[i].type_name;
+            result += parameters[i].declared_type()->to_string();
             if (parameters[i].name.get_type() != TOKEN_TYPE::TOKEN_NULL)
                 result += " " + parameters[i].name.get_token();
         }
@@ -40,7 +40,7 @@ namespace mx {
     }
     std::string ReturnNode::to_string() const { return "return" + (expression ? " " + expression->to_string() : "") + ";"; }
     std::string DeclarationNode::to_string() const {
-        std::string result = type_name + " ";
+        std::string result = declared_type()->to_string() + " ";
         for (size_t i = 0; i < declarators.size(); ++i) {
             if (i)
                 result += ", ";
@@ -75,7 +75,7 @@ namespace mx {
     void ICode::visit(CastNode &node) {
         node.value->accept(*this);
         auto result = get_temp();
-        stream << "CAST " << result << ", " << node.type_name << ", " << values.back() << "\n";
+        stream << "CAST " << result << ", " << node.declared_type()->to_string() << ", " << values.back() << "\n";
         values.back() = result;
     }
     void ICode::visit(CallNode &node) {
@@ -102,14 +102,14 @@ namespace mx {
     }
     void ICode::visit(FunctionNode &node) {
         if (!node.body) {
-            stream << "PROTO " << node.name.get_token() << ", " << node.return_type << "\n";
+            stream << "PROTO " << node.name.get_token() << ", " << node.result_type()->to_string() << "\n";
             return;
         }
-        stream << "FUNC " << node.name.get_token() << ", " << node.return_type << "\n";
+        stream << "FUNC " << node.name.get_token() << ", " << node.result_type()->to_string() << "\n";
         for (const auto &parameter : node.parameters)
-            stream << "PARAM " << parameter.name.get_token() << ", " << parameter.type_name << "\n";
+            stream << "PARAM " << parameter.name.get_token() << ", " << parameter.declared_type()->to_string() << "\n";
         node.body->accept(*this);
-        if (node.return_type == "void")
+        if (node.result_type()->to_string() == "void")
             stream << "RETURN\n";
         else if (node.name.get_token() == "main")
             stream << "RETURN 0\n";
@@ -123,7 +123,7 @@ namespace mx {
     }
     void ICode::visit(DeclarationNode &node) {
         for (auto &declarator : node.declarators) {
-            stream << "VAR " << declarator.name.get_token() << ", " << node.type_name << "\n";
+            stream << "VAR " << declarator.name.get_token() << ", " << node.declared_type()->to_string() << "\n";
             if (declarator.initializer) {
                 declarator.initializer->accept(*this);
                 stream << "SET " << declarator.name.get_token() << ", " << values.back() << "\n";

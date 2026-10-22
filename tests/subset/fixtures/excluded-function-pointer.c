@@ -1,0 +1,1 @@
+int (*callback)(int);

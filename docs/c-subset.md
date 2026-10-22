@@ -15,11 +15,11 @@ never executes. Target execution is deliberately outside the parser milestone.
 | --- | --- | --- | --- | --- | --- |
 | Arithmetic, assignments, calls, comma, `?:`, casts | Yes | Numeric subset; runtime checks | Yes / typed operands and lvalues | 2, 4 | `expressions`, `invalid-lvalue`, `bad-operands` |
 | Integer, floating, character, adjacent string literals | Yes | Numeric only | Yes / typed, decoded literals | 2, 6 | `literals`, `scalars` |
-| Scalar types and qualifiers | Partial; type strings | Signed 64-bit integers, double arithmetic, float conversion | Yes / structured types and scalar conversions | 2, 4 | `scalars`, `bad-type`, `const-write`, `bad-restrict` |
+| Scalar types and qualifiers | Structured scalar/qualified types | Signed 64-bit integers, double arithmetic, float conversion | Yes / scalar conversions | 2, 4 | `scalars`, `bad-type`, `const-write`, `bad-restrict` |
 | Numeric globals, locals, multiple declarators, block scopes | Yes | Numeric execution; runtime scope checks | Yes / per-declarator types and lexical resolution | 3, 4 | `numeric-program`, `mixed-declarators`, `duplicate-local` |
 | Prototypes, definitions, typed parameters, recursion, void | Yes | Direct numeric calls; runtime signature checks | Yes / compatible declarations and calls | 3, 4 | `numeric-program`, `prototype-conflict`, `bad-call`, `bad-return` |
 | Scoped typedefs and ordinary-name shadowing | No; expression API can register type names | No typedef declaration handling | Yes / scoped typedef disambiguation | 3 | `typedef-scope`, `bad-typedef` |
-| Pointers, arrays, parenthesized and abstract declarators | Partial; pointer type strings, subscript syntax | No pointer/array execution | Yes / derived types, array adjustment for parameters | 3, 6 | `declarators`, `abstract-types`, `array-parameter`, `bad-declarator` |
+| Pointers, arrays, parenthesized and abstract declarators | Structured pointer types and subscript syntax; array/function type factories exist, declaration syntax remains partial | No pointer/array execution | Yes / derived types, array adjustment for parameters | 3, 6 | `declarators`, `abstract-types`, `array-parameter`, `bad-declarator` |
 | `sizeof`, address/dereference, `.`, `->`, subscripting | Expression syntax only | No execution | Yes / complete object types and valid members | 4, 6 | `expressions`, `abstract-types`, `aggregates`, `unknown-member` |
 | Blocks, empty statements, `if`/`else`, `while`, `for`, jumps | Yes | Numeric execution; parser checks loop jumps | Yes / scalar conditions and jump contexts | 4, 5 | `numeric-program`, `dangling-else`, `bad-break`, `bad-continue` |
 | `do`/`while`, `switch`, `case`, `default`, fallthrough | No | No | Yes / integral unique cases, enclosing contexts | 5 | `structured-statements`, `bad-case`, `duplicate-case`, `duplicate-default`, `switch-continue` |
@@ -27,7 +27,7 @@ never executes. Target execution is deliberately outside the parser milestone.
 | Enum definitions and integer constant expressions | Tag references only | No enum/bound validation | Yes / constant values and positive array bounds | 6 | `aggregates`, `bad-bound`, `nonconstant-bound` |
 | Scalar, positional brace, and character-array string initializers | Scalar expressions only | Numeric only | Yes / type, shape, and bounds checking | 6 | `initializers`, `bad-initializer` |
 | File-scope `static` and `extern` | Accepted but discarded | No linkage semantics | Yes / one-unit declarations and storage | 3, 4 | `storage`, `bad-storage` |
-| AST source locations and useful diagnostics | Token lines on some errors | No common diagnostic model | Yes / offending token, line, expected syntax or constraint | 2 | `missing-semicolon`, `unexpected-eof` |
+| AST source locations and useful diagnostics | AST start locations and parser exception locations | Line, offending token, expected syntax; lexer reason retained | Implemented for current grammar | 2 | `missing-semicolon`, `unexpected-eof` |
 | Combined translation unit and AST round trip | Numeric subset | Numeric execution | Yes / all included features together | 7 | `combined` |
 | Excluded features listed below | Some fragments accepted | No support contract | Explicit unsupported-feature diagnostic | 1, 7 | All `excluded-*` fixtures |
 
@@ -193,16 +193,71 @@ Run the existing CMake/CTest commands in the README. The `subset-fixtures` test
 reads every manifest entry and checks **current syntax behavior only**, through
 `parse_program()` without evaluation or output files. A future semantic rejection
 can therefore be a current syntax acceptance. Parse errors must produce a
-nonempty `ParserException`; exact wording is not frozen. Other exceptions fail
+nonempty `ParserException` with a line and token; exact wording is not frozen. Other exceptions fail
 the test. The existing expression and function regressions remain unchanged.
 
 The manifest records target parsing, target validation, and the expected
 diagnostic meaning independently. As milestones land, update current parsing
 expectations and add semantic/AST assertions to the corresponding test suite.
 Do not change a target rejection into acceptance just to match current behavior.
-Step 2 must add source-location assertions; step 3 must verify per-declarator
+Step 2 adds source-location assertions in `types-and-source`; step 3 must verify per-declarator
 types and scoped typedefs; steps 4–6 must test their semantic diagnostics without
 execution; step 7 must add combined AST round trips and compiler comparisons.
 Step 8 uses the same positive fixtures as candidates for runtime tests only
 after documenting execution support. No fixture in this suite implies it can
 currently be interpreted.
+
+## Structured types and source locations
+
+Roadmap step 2 is implemented for the existing grammar. `mx::TypePtr` is a shared
+pointer to an immutable `mx::Type`. Inspect `kind` before reading the corresponding
+fields: `scalar` for scalar types; `qualifiers` and `element` for qualified types;
+`element` for a pointer target or array element; and `element` plus `parameters`
+for a function result and parameter types. Arrays have an optional `bound`.
+Tagged types preserve `tag` and `name`; registered typedef references use `Named`
+and remain unresolved until scoped typedef handling and name resolution land.
+`unqualified()` removes the outer qualifier wrapper without removing qualifiers
+from a pointer target. `equals()` compares structure and qualifier placement,
+independent of spelling; it does not perform scoped tag resolution or C type
+compatibility checking. `to_string()` preserves parsed type-name spelling and
+prints abstract declarators for types built using factories.
+
+Parser-created `CastNode`, type-form `SizeofNode`, `DeclarationNode`, `Parameter`,
+and `Declarator` objects expose `type`. A `FunctionNode::type` is a function type;
+`result_type()` and `signature_type()` provide convenient access. Declarators in
+one declaration still share the existing type until step 3 implements independent
+declarators. Array and function factories provide representation and printing;
+they do not enable additional declaration syntax or execution.
+
+Existing public `type_name` and `return_type` strings are compatibility snapshots.
+The evaluator and visitors use structured types when present; changing a snapshot
+does not change an already parsed type. Legacy string constructors remain, and
+manually built nodes without `type` resolve their legacy spelling on access.
+The numeric evaluator keeps its documented integer widths and floating behavior;
+the new representation does not implement C's full conversions or `sizeof`.
+
+Every parser-created AST node, parameter, and declarator has a `location` holding
+its starting token and 1-based line. Compound expression locations refer to the
+beginning of the expression, including an opening parenthesis when present.
+Line zero denotes a manually constructed object with no source. MXLex does not
+provide columns, filenames, or end positions, so these are not fabricated.
+
+Syntax errors expose `ParserException::location` and report expected syntax,
+line, and the found token (`end of input` at EOF). Lexical errors retain MXLex's
+reason and scanner line. If MXLex throws before returning a token, the diagnostic
+uses `invalid lexical input` in place of an unavailable token spelling; a reason
+such as an unterminated comment can also include its starting line. Legacy I/O
+errors and invalid uses of token-access APIs have no source location.
+
+```cpp
+std::istringstream input("(const unsigned long *)p");
+mx::Parser parser(input);
+try {
+    auto expression = parser.parse_expression();
+    const auto &cast = dynamic_cast<const mx::CastNode &>(*expression);
+    std::cout << cast.type->to_string() << '\n'; // const unsigned long *
+    std::cout << cast.location.line << '\n';    // 1
+} catch (const mx::ParserException &error) {
+    std::cerr << error.what() << '\n';
+}
+```

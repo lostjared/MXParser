@@ -85,12 +85,14 @@ namespace mx {
     bool Parser::scan() {
         tokens.clear();
         index = 0;
+        scan_failure.reset();
         try {
             Token token;
             TOKEN_TYPE token_type;
             while ((token_type = scanner.lex(token)) != mx::TOKEN_TYPE::TOKEN_NULL) {
                 if (token_type == mx::TOKEN_TYPE::TOKEN_ERROR) {
-                    std::cerr << "MXParser:" << token << "\n";
+                    scan_failure.emplace("Expected a valid token", SourceLocation::from_token(token));
+                    std::cerr << scan_failure->what() << "\n";
                     return false;
                 }
                 if (token.get_token() == "<:")
@@ -103,7 +105,8 @@ namespace mx {
             token.set_line(scanner.get_line());
             tokens.push_back(token);
         } catch (const mx::ScannerError &e) {
-            std::cerr << "MXLex: Token Error Exception: " << e.what() << "\n";
+            scan_failure.emplace(std::string("Expected valid lexical input: ") + e.what(), SourceLocation{scanner.get_line(), "invalid lexical input"});
+            std::cerr << scan_failure->what() << "\n";
             return false;
         }
         return true;
@@ -271,28 +274,30 @@ namespace mx {
         return true;
     }
 
+    [[noreturn]] void Parser::fail_at(const Token &token, const std::string &message) { throw ParserException(message, SourceLocation::from_token(token)); }
+    [[noreturn]] void Parser::fail(const std::string &message) { fail_at(top(), message); }
+
     void Parser::expect(const std::string &text) {
-        if (!match(text)) {
-            throw ParserException(std::format("Expected '{}' at line {}, found '{}'", text, top().get_line(), top().get_type() == TOKEN_TYPE::TOKEN_NULL ? "end of input" : top().get_token()));
-        }
+        if (!match(text))
+            fail("Expected '" + text + "'");
     }
 
     void Parser::add_type_name(const std::string &name) { type_names.insert(name); }
 
     std::unique_ptr<ExprNode> Parser::parse_expression() {
         if (!scan())
-            throw ParserException("Scanning failed");
+            throw *scan_failure;
         auto result = expr();
         match(";");
         if (top().get_type() != TOKEN_TYPE::TOKEN_NULL) {
-            throw ParserException(std::format("Unexpected '{}' after expression at line {}", top().get_token(), top().get_line()));
+            fail("Expected end of input after expression");
         }
         return result;
     }
 
     std::vector<std::unique_ptr<ExprNode>> Parser::parse_expressions() {
         if (!scan())
-            throw ParserException("Scanning failed");
+            throw *scan_failure;
         std::vector<std::unique_ptr<ExprNode>> result;
         while (top().get_type() != TOKEN_TYPE::TOKEN_NULL) {
             if (match(";"))
@@ -331,7 +336,7 @@ namespace mx {
             index = start;
             unary();
             if (index != end)
-                throw ParserException(std::format("Expected unary expression before assignment at line {}", top().get_line()));
+                fail("Expected unary expression before assignment");
             Token op = top();
             advance();
             return std::make_unique<BinaryNode>(std::move(left), op, assignment_expr());
@@ -368,80 +373,58 @@ namespace mx {
         return builtin_type(text) || qualifier(text) || text == "struct" || text == "union" || text == "enum" || type_names.contains(text);
     }
 
-    std::string Parser::type_name() {
-        std::string result;
+    TypePtr Parser::type_name() {
+        std::string spelling;
+        Token last_specifier = top();
         bool have_type = false;
-        std::unordered_map<std::string, int> specifiers;
+        auto append = [&] {
+            if (!spelling.empty())
+                spelling += " ";
+            spelling += top().get_token();
+            advance();
+        };
         while (qualifier(top().get_token()) || builtin_type(top().get_token())) {
             if (builtin_type(top().get_token())) {
                 have_type = true;
-                ++specifiers[top().get_token()];
+                last_specifier = top();
             }
-            if (!result.empty())
-                result += " ";
-            result += top().get_token();
-            advance();
-        }
-        if (have_type) {
-            for (const auto &[name, count] : specifiers) {
-                if (count > (name == "long" ? 2 : 1))
-                    throw ParserException("Duplicate type specifier: " + name);
-            }
-            bool valid = !(specifiers["signed"] && specifiers["unsigned"]);
-            int sign = specifiers["signed"] + specifiers["unsigned"];
-            int total = 0;
-            for (const auto &[name, count] : specifiers)
-                total += count;
-            if (specifiers["void"] || specifiers["_Bool"] || specifiers["float"])
-                valid = valid && total == 1;
-            else if (specifiers["double"])
-                valid = valid && total == 1 + specifiers["long"] && specifiers["long"] <= 1;
-            else if (specifiers["char"])
-                valid = valid && total == 1 + sign;
-            else
-                valid = valid && !(specifiers["short"] && specifiers["long"]);
-            if (!valid)
-                throw ParserException("Invalid type specifiers: " + result);
+            append();
         }
         if (!have_type && (top().get_token() == "struct" || top().get_token() == "union" || top().get_token() == "enum")) {
-            if (!result.empty())
-                result += " ";
-            result += top().get_token();
-            advance();
+            append();
             if (top().get_type() != TOKEN_TYPE::IDENTIFIER || keyword(top().get_token()))
-                throw ParserException("Expected type tag");
-            result += " " + top().get_token();
-            advance();
+                fail("Expected type tag");
+            append();
             have_type = true;
         } else if (!have_type && type_names.contains(top().get_token())) {
-            if (!result.empty())
-                result += " ";
-            result += top().get_token();
-            advance();
+            append();
             have_type = true;
         }
         if (!have_type)
-            throw ParserException("Expected type name");
-        while (qualifier(top().get_token())) {
-            result += " " + top().get_token();
-            advance();
+            fail("Expected type name");
+        while (qualifier(top().get_token()))
+            append();
+        while (top().get_token() == "*") {
+            append();
+            while (qualifier(top().get_token()))
+                append();
         }
-        while (match("*")) {
-            result += " *";
-            while (qualifier(top().get_token())) {
-                result += " " + top().get_token();
-                advance();
-            }
+        try {
+            return Type::from_name(spelling);
+        } catch (const std::invalid_argument &error) {
+            fail_at(last_specifier, std::string("Expected valid type specifiers: ") + error.what());
         }
-        return result;
     }
 
     std::unique_ptr<ExprNode> Parser::cast() {
         if (top().get_token() == "(" && starts_type_name(index + 1)) {
+            Token start = top();
             advance();
             auto type = type_name();
             expect(")");
-            return std::make_unique<CastNode>(std::move(type), cast());
+            auto result = std::make_unique<CastNode>(std::move(type), cast());
+            result->location = SourceLocation::from_token(start);
+            return result;
         }
         return unary();
     }
@@ -455,9 +438,13 @@ namespace mx {
                 advance();
                 auto type = type_name();
                 expect(")");
-                return std::make_unique<SizeofNode>(std::move(type));
+                auto result = std::make_unique<SizeofNode>(std::move(type));
+                result->location = SourceLocation::from_token(op);
+                return result;
             }
-            return std::make_unique<SizeofNode>(unary());
+            auto result = std::make_unique<SizeofNode>(unary());
+            result->location = SourceLocation::from_token(op);
+            return result;
         }
         if (text == "++" || text == "--") {
             advance();
@@ -491,7 +478,7 @@ namespace mx {
                 advance();
                 Token member = top();
                 if (member.get_type() != TOKEN_TYPE::IDENTIFIER || keyword(member.get_token()))
-                    throw ParserException("Expected member name");
+                    fail("Expected member name");
                 advance();
                 result = std::make_unique<MemberNode>(std::move(result), op, member);
             } else if (top().get_token() == "++" || top().get_token() == "--") {
@@ -508,6 +495,7 @@ namespace mx {
         if (match("(")) {
             auto result = expr();
             expect(")");
+            result->location = SourceLocation::from_token(current);
             return result;
         }
         if (current.get_type() == TOKEN_TYPE::IDENTIFIER && !keyword(current.get_token()) && !type_names.contains(current.get_token())) {
@@ -519,6 +507,7 @@ namespace mx {
             return std::make_unique<NumberNode>(current);
         }
         if (current.get_type() == TOKEN_TYPE::FLOAT_VALUE || current.get_type() == TOKEN_TYPE::CHARACTER_VALUE || current.get_type() == TOKEN_TYPE::STRING_VALUE) {
+            auto location = SourceLocation::from_token(current);
             advance();
             if (current.get_type() == TOKEN_TYPE::STRING_VALUE) {
                 std::string text = current.get_token();
@@ -528,9 +517,11 @@ namespace mx {
                 }
                 current.set_token(text, TOKEN_TYPE::STRING_VALUE);
             }
-            return std::make_unique<LiteralNode>(current);
+            auto result = std::make_unique<LiteralNode>(current);
+            result->location = std::move(location);
+            return result;
         }
-        throw ParserException(std::format("Expected expression at line {}, found '{}'", current.get_line(), current.get_type() == TOKEN_TYPE::TOKEN_NULL ? "end of input" : current.get_token()));
+        fail("Expected expression");
     }
 
     std::unique_ptr<ExprNode> Parser::factor() { return unary(); }
@@ -538,14 +529,14 @@ namespace mx {
 
     std::unique_ptr<ProgramNode> Parser::parse_program() {
         if (!scan())
-            throw ParserException("Scanning failed");
+            throw *scan_failure;
         return program();
     }
 
     Token Parser::identifier() {
         Token name = top();
         if (name.get_type() != TOKEN_TYPE::IDENTIFIER || keyword(name.get_token()) || type_names.contains(name.get_token())) {
-            throw ParserException(std::format("Expected identifier at line {}, found '{}'", name.get_line(), name.get_token()));
+            fail("Expected identifier");
         }
         advance();
         return name;
@@ -553,19 +544,22 @@ namespace mx {
 
     std::unique_ptr<ProgramNode> Parser::program() {
         auto result = std::make_unique<ProgramNode>();
+        result->location = SourceLocation::from_token(top());
         while (top().get_type() != TOKEN_TYPE::TOKEN_NULL) {
             if (match(";"))
                 continue;
+            auto location = SourceLocation::from_token(top());
             while (top().get_token() == "static" || top().get_token() == "extern" || top().get_token() == "inline")
                 advance();
             auto type = type_name();
             auto name = identifier();
             if (!match("(")) {
-                result->declarations.push_back(declaration(std::move(type), name));
+                result->declarations.push_back(declaration(std::move(type), name, location));
                 continue;
             }
             auto function = std::make_unique<FunctionNode>();
-            function->return_type = std::move(type);
+            function->return_type = type->to_string();
+            function->location = location;
             function->name = name;
             std::set<std::string> names;
             if (top().get_token() == "void" && peek(1).get_token() == ")")
@@ -573,13 +567,15 @@ namespace mx {
             else if (top().get_token() != ")") {
                 do {
                     Parameter parameter;
-                    parameter.type_name = type_name();
-                    if (parameter.type_name == "void")
-                        throw ParserException("A parameter cannot have type void");
+                    parameter.location = SourceLocation::from_token(top());
+                    parameter.type = type_name();
+                    parameter.type_name = parameter.type->to_string();
+                    if (parameter.type->unqualified().kind == TypeKind::Scalar && parameter.type->unqualified().scalar == ScalarKind::Void)
+                        throw ParserException("Expected a non-void parameter type", parameter.location);
                     if (top().get_type() == TOKEN_TYPE::IDENTIFIER && !keyword(top().get_token())) {
                         parameter.name = identifier();
                         if (!names.insert(parameter.name.get_token()).second)
-                            throw ParserException("Duplicate parameter name");
+                            fail_at(parameter.name, "Expected unique parameter name");
                     }
                     function->parameters.push_back(std::move(parameter));
                 } while (match(","));
@@ -588,21 +584,29 @@ namespace mx {
             if (!match(";")) {
                 for (const auto &parameter : function->parameters) {
                     if (parameter.name.get_type() == TOKEN_TYPE::TOKEN_NULL)
-                        throw ParserException("Function definition requires named parameters");
+                        fail("Expected named parameters in function definition");
                 }
                 function->body = block();
             }
+            std::vector<TypePtr> parameter_types;
+            for (const auto &parameter : function->parameters)
+                parameter_types.push_back(parameter.type);
+            function->type = Type::function(std::move(type), std::move(parameter_types));
             result->declarations.push_back(std::move(function));
         }
         return result;
     }
 
-    std::unique_ptr<DeclarationNode> Parser::declaration(std::string type, Token name) {
+    std::unique_ptr<DeclarationNode> Parser::declaration(TypePtr type, Token name, SourceLocation location) {
         auto result = std::make_unique<DeclarationNode>();
-        result->type_name = std::move(type);
+        result->type_name = type->to_string();
+        result->type = std::move(type);
+        result->location = std::move(location);
         for (;;) {
             Declarator declarator;
             declarator.name = name;
+            declarator.location = SourceLocation::from_token(name);
+            declarator.type = result->type;
             if (match("="))
                 declarator.initializer = assignment_expr();
             result->declarators.push_back(std::move(declarator));
@@ -615,23 +619,30 @@ namespace mx {
     }
 
     std::unique_ptr<BlockNode> Parser::block() {
+        auto location = SourceLocation::from_token(top());
         expect("{");
         auto result = std::make_unique<BlockNode>();
+        result->location = location;
         while (!match("}")) {
             if (top().get_type() == TOKEN_TYPE::TOKEN_NULL)
-                throw ParserException("Expected '}' before end of input");
+                fail("Expected '}' before end of input");
             result->statements.push_back(function_statement(true));
         }
         return result;
     }
 
     std::unique_ptr<ASTNode> Parser::function_statement(bool allow_declaration) {
+        auto location = SourceLocation::from_token(top());
         if (top().get_token() == "{")
             return block();
-        if (match(";"))
-            return std::make_unique<BlockNode>();
+        if (match(";")) {
+            auto result = std::make_unique<BlockNode>();
+            result->location = location;
+            return result;
+        }
         if (match("return")) {
             auto result = std::make_unique<ReturnNode>();
+            result->location = location;
             if (top().get_token() != ";")
                 result->expression = expr();
             expect(";");
@@ -639,6 +650,7 @@ namespace mx {
         }
         if (match("if")) {
             auto result = std::make_unique<IfNode>();
+            result->location = location;
             expect("(");
             result->condition = expr();
             expect(")");
@@ -649,6 +661,7 @@ namespace mx {
         }
         if (match("while")) {
             auto result = std::make_unique<WhileNode>();
+            result->location = location;
             expect("(");
             result->condition = expr();
             expect(")");
@@ -664,11 +677,13 @@ namespace mx {
         }
         if (match("for")) {
             auto result = std::make_unique<ForNode>();
+            result->location = location;
             expect("(");
             if (starts_type_name(index)) {
+                auto declaration_location = SourceLocation::from_token(top());
                 auto type = type_name();
                 auto name = identifier();
-                result->initializer = declaration(std::move(type), name);
+                result->initializer = declaration(std::move(type), name, declaration_location);
             } else {
                 if (top().get_token() != ";")
                     result->initializer = expr();
@@ -692,8 +707,9 @@ namespace mx {
         }
         if (top().get_token() == "break" || top().get_token() == "continue") {
             if (!loop_depth)
-                throw ParserException("break/continue requires an enclosing loop");
+                fail("Expected an enclosing loop for break/continue");
             auto result = std::make_unique<JumpNode>();
+            result->location = location;
             result->is_break = top().get_token() == "break";
             advance();
             expect(";");
@@ -701,10 +717,10 @@ namespace mx {
         }
         if (starts_type_name(index)) {
             if (!allow_declaration)
-                throw ParserException("A declaration requires a block");
+                fail("Expected statement; a declaration requires a block");
             auto type = type_name();
             auto name = identifier();
-            return declaration(std::move(type), name);
+            return declaration(std::move(type), name, location);
         }
         auto result = expr();
         expect(";");
