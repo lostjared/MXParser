@@ -27,7 +27,7 @@ never executes. Target execution is deliberately outside the parser milestone.
 | Enum definitions and integer constant expressions | Tag references only | No enum/bound validation | Yes / constant values and positive array bounds | 6 | `aggregates`, `bad-bound`, `nonconstant-bound` |
 | Scalar, positional brace, and character-array string initializers | Scalar expressions only | Numeric only | Yes / type, shape, and bounds checking | 6 | `initializers`, `bad-initializer` |
 | File-scope `static` and `extern` | Accepted but discarded | No linkage semantics | Yes / one-unit declarations and storage | 3, 4 | `storage`, `bad-storage` |
-| AST source locations and useful diagnostics | AST start locations and parser exception locations | Line, offending token, expected syntax; lexer reason retained | Implemented for current grammar | 2 | `missing-semicolon`, `unexpected-eof` |
+| AST source locations and useful diagnostics | AST start locations and parser exception locations | Line, column when available, offending token, expected syntax; lexer reason retained | Implemented for current grammar | 2 | `missing-semicolon`, `unexpected-eof` |
 | Combined translation unit and AST round trip | Numeric subset | Numeric execution | Yes / all included features together | 7 | `combined` |
 | Excluded features listed below | Some fragments accepted | No support contract | Explicit unsupported-feature diagnostic | 1, 7 | All `excluded-*` fixtures |
 
@@ -193,7 +193,7 @@ Run the existing CMake/CTest commands in the README. The `subset-fixtures` test
 reads every manifest entry and checks **current syntax behavior only**, through
 `parse_program()` without evaluation or output files. A future semantic rejection
 can therefore be a current syntax acceptance. Parse errors must produce a
-nonempty `ParserException` with a line and token; exact wording is not frozen. Other exceptions fail
+nonempty `ParserException` with a line, token, and column when available; exact wording is not frozen. Other exceptions fail
 the test. The existing expression and function regressions remain unchanged.
 
 The manifest records target parsing, target validation, and the expected
@@ -237,16 +237,19 @@ The numeric evaluator keeps its documented integer widths and floating behavior;
 the new representation does not implement C's full conversions or `sizeof`.
 
 Every parser-created AST node, parameter, and declarator has a `location` holding
-its starting token and 1-based line. Compound expression locations refer to the
+its starting token, 1-based line, and 1-based column. Compound expression locations refer to the
 beginning of the expression, including an opening parenthesis when present.
-Line zero denotes a manually constructed object with no source. MXLex does not
-provide columns, filenames, or end positions, so these are not fabricated.
+Line zero denotes a manually constructed object with no source; column zero
+denotes an unavailable column. Columns follow MXLex byte positions, with a tab
+counting as one column. MXLex does not provide filenames or end positions.
 
 Syntax errors expose `ParserException::location` and report expected syntax,
-line, and the found token (`end of input` at EOF). Lexical errors retain MXLex's
-reason and scanner line. If MXLex throws before returning a token, the diagnostic
+line, column when available, and the found token (`end of input` at EOF).
+Lexical errors retain MXLex's reason and scanner line. If MXLex throws before returning a token, the diagnostic
 uses `invalid lexical input` in place of an unavailable token spelling; a reason
-such as an unterminated comment can also include its starting line. Legacy I/O
+such as an unterminated comment can also include its starting line. The current
+lexer does not expose columns for EOF or scanner exceptions, so these remain
+zero and diagnostics omit the column. Returned error tokens do retain columns. Legacy I/O
 errors and invalid uses of token-access APIs have no source location.
 
 ```cpp
@@ -256,7 +259,7 @@ try {
     auto expression = parser.parse_expression();
     const auto &cast = dynamic_cast<const mx::CastNode &>(*expression);
     std::cout << cast.type->to_string() << '\n'; // const unsigned long *
-    std::cout << cast.location.line << '\n';    // 1
+    std::cout << cast.location.line << ':' << cast.location.column << '\n'; // 1:1
 } catch (const mx::ParserException &error) {
     std::cerr << error.what() << '\n';
 }

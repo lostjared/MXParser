@@ -1,6 +1,7 @@
 #include <MXParser/parser.hpp>
 #include <cstdlib>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -24,8 +25,12 @@ namespace {
         mx::Parser parser(input);
         return parser.parse_program();
     }
-    void location(const mx::SourceLocation &source, size_t line, const std::string &token) { check(source.line == line && source.token == token, "Expected line " + std::to_string(line) + " token '" + token + "', got line " + std::to_string(source.line) + " token '" + source.token + "'"); }
-    void rejects(const std::string &source, bool is_program, size_t line, const std::string &token, const std::string &expected) {
+    void location(const mx::SourceLocation &source, size_t line, const std::string &token, std::optional<size_t> column = {}) {
+        if (column)
+            check(source.column == *column, "Expected column " + std::to_string(*column) + ", got " + std::to_string(source.column));
+        check(source.line == line && source.token == token, "Expected line " + std::to_string(line) + " token '" + token + "', got line " + std::to_string(source.line) + " token '" + source.token + "'");
+    }
+    void rejects(const std::string &source, bool is_program, size_t line, const std::string &token, const std::string &expected, size_t column) {
         try {
             if (is_program)
                 program(source);
@@ -33,8 +38,9 @@ namespace {
                 expression(source);
             check(false, "Accepted invalid input: " + source);
         } catch (const mx::ParserException &error) {
-            location(error.location, line, token);
+            location(error.location, line, token, column);
             const std::string text = error.what();
+            check(column ? text.find(", column " + std::to_string(column) + ",") != std::string::npos : text.find(", column ") == std::string::npos, "Incorrect diagnostic column: " + text);
             check(text.find(expected) != std::string::npos && text.find("at line " + std::to_string(line)) != std::string::npos && text.find("found '" + token + "'") != std::string::npos, "Incomplete diagnostic: " + text);
         }
     }
@@ -42,7 +48,7 @@ namespace {
     class Locations : public mx::ASTVisitor {
       public:
         void walk(mx::ASTNode &node) {
-            check(node.location.line != 0 && !node.location.token.empty(), "Missing source on " + node.to_string());
+            check(node.location.line != 0 && node.location.column != 0 && !node.location.token.empty(), "Missing source on " + node.to_string());
             node.accept(*this);
         }
         void visit(mx::NumberNode &) override {}
@@ -80,13 +86,13 @@ namespace {
         }
         void visit(mx::FunctionNode &node) override {
             for (auto &parameter : node.parameters)
-                check(parameter.location.line > 0, "Missing parameter source");
+                check(parameter.location.line > 0 && parameter.location.column > 0, "Missing parameter source");
             if (node.body)
                 walk(*node.body);
         }
         void visit(mx::DeclarationNode &node) override {
             for (auto &declarator : node.declarators) {
-                check(declarator.location.line > 0 && declarator.location.token == declarator.name.get_token(), "Missing declarator source");
+                check(declarator.location.line > 0 && declarator.location.column > 0 && declarator.location.token == declarator.name.get_token(), "Missing declarator source");
                 if (declarator.initializer)
                     walk(*declarator.initializer);
             }
@@ -180,18 +186,18 @@ namespace {
         auto ast = program("\n// skipped\nconst double global=1.5;\nfloat f(\n const int n, double x) {\n int a=1,b=2;\n if(n) { a++; } else ;\n while(a<3) { ++a; if(a==2) continue; break; }\n for(int i=0;i<n;++i) x+=i;\n return (float)(x+global);\n}\n");
         Locations locations;
         locations.walk(*ast);
-        location(ast->location, 3, "const");
+        location(ast->location, 3, "const", 1);
         auto &global = dynamic_cast<mx::DeclarationNode &>(*ast->declarations[0]);
-        location(global.location, 3, "const");
-        location(global.declarators[0].location, 3, "global");
+        location(global.location, 3, "const", 1);
+        location(global.declarators[0].location, 3, "global", 14);
         check(global.type->kind == mx::TypeKind::Qualified && global.type->unqualified().scalar == mx::ScalarKind::Double, "Global structured type");
         auto &function = dynamic_cast<mx::FunctionNode &>(*ast->declarations[1]);
-        location(function.location, 4, "float");
-        location(function.parameters[0].location, 5, "const");
-        location(function.body->location, 5, "{");
+        location(function.location, 4, "float", 1);
+        location(function.parameters[0].location, 5, "const", 2);
+        location(function.body->location, 5, "{", 25);
         auto &loop = dynamic_cast<mx::ForNode &>(*function.body->statements[3]);
-        location(loop.location, 9, "for");
-        location(loop.initializer->location, 9, "int");
+        location(loop.location, 9, "for", 2);
+        location(loop.initializer->location, 9, "int", 6);
         check(function.type->kind == mx::TypeKind::Function && function.type->element->scalar == mx::ScalarKind::Float && function.type->parameters[0] == function.parameters[0].type, "Shared function signature types");
         auto printed = ast->to_string();
         check(program(printed)->to_string() == printed, "Typed program round trip");
@@ -199,17 +205,25 @@ namespace {
         auto tree = expression("\n/* comment */\nf(\n(int)1,\n\"hello\"\n\"world\")[0].field->next++ ? sizeof(int *) : sizeof x");
         locations.walk(*tree);
         auto &conditional = dynamic_cast<mx::ConditionalNode &>(*tree);
-        location(tree->location, 3, "f");
-        location(conditional.then_expr->location, 6, "sizeof");
+        location(tree->location, 3, "f", 1);
+        location(conditional.then_expr->location, 6, "sizeof", 29);
         auto &postfix = dynamic_cast<mx::UnaryNode &>(*conditional.condition);
         auto &arrow = dynamic_cast<mx::MemberNode &>(*postfix.value);
         auto &member = dynamic_cast<mx::MemberNode &>(*arrow.base);
         auto &subscript = dynamic_cast<mx::SubscriptNode &>(*member.base);
         auto &call = dynamic_cast<mx::CallNode &>(*subscript.base);
-        location(call.arguments[0]->location, 4, "(");
-        location(call.arguments[1]->location, 5, "\"hello\"");
+        location(call.arguments[0]->location, 4, "(", 1);
+        location(call.arguments[1]->location, 5, "\"hello\"", 1);
         auto parenthesized = expression("\n(\n a+b)");
-        location(parenthesized->location, 2, "(");
+        location(parenthesized->location, 2, "(", 1);
+        auto indented = expression("\r\n\t/* skip */  (const int *)p");
+        location(indented->location, 2, "(", 14);
+        auto &indented_cast = dynamic_cast<mx::CastNode &>(*indented);
+        location(indented_cast.value->location, 2, "p", 27);
+        std::istringstream digraph_input("  a<: 2 :>");
+        mx::Parser digraph_parser(digraph_input);
+        check(digraph_parser.scan(), "Digraph scanning failed");
+        check(digraph_parser.peek(1).get_token() == "[" && digraph_parser.peek(1).get_column() == 4 && digraph_parser.peek(3).get_token() == "]" && digraph_parser.peek(3).get_column() == 9, "Digraph normalization must preserve columns");
 
         auto numeric = program("double half(double x) { double value=x/2; return (double)value; }");
         auto &half = dynamic_cast<mx::FunctionNode &>(*numeric->declarations[0]);
@@ -232,21 +246,24 @@ namespace {
     }
 
     void diagnostics() {
-        rejects("\nint main(void) {\n return 1\n}\n", true, 4, "}", "Expected ';'");
-        rejects("\nint main(void) {\n return 1;\n", true, 4, "end of input", "Expected '}'");
-        rejects("\n(unsigned float)x", false, 2, "float", "Expected valid type specifiers");
-        rejects("\n(int int)x", false, 2, "int", "Duplicate type specifier");
-        rejects("\nsizeof(struct )", false, 2, ")", "Expected type tag");
-        rejects("\nx->int", false, 2, "int", "Expected member name");
-        rejects("\na b", false, 2, "b", "Expected end of input");
-        rejects("\nf(a,)", false, 2, ")", "Expected expression");
-        rejects("int f(int x,\nint x);", true, 2, "x", "Expected unique parameter name");
-        rejects("\nint f(void x);", true, 2, "void", "Expected a non-void parameter type");
-        rejects("\nint f(void){break;}", true, 2, "break", "Expected an enclosing loop");
-        rejects("\n`", false, 2, "`", "Expected a valid token");
-        rejects("\n1e+", false, 2, "invalid lexical input", "Invalid numeric literal");
-        rejects("\n\"unterminated", false, 2, "invalid lexical input", "Unterminated literal");
-        rejects("", false, 1, "end of input", "Expected expression");
+        rejects("\nint main(void) {\n return 1\n}\n", true, 4, "}", "Expected ';'", 1);
+        rejects("\nint main(void) {\n return 1;\n", true, 4, "end of input", "Expected '}'", 0);
+        rejects("\n(unsigned float)x", false, 2, "float", "Expected valid type specifiers", 11);
+        rejects("\n(int int)x", false, 2, "int", "Duplicate type specifier", 6);
+        rejects("\nsizeof(struct )", false, 2, ")", "Expected type tag", 15);
+        rejects("\nx->int", false, 2, "int", "Expected member name", 4);
+        rejects("\na b", false, 2, "b", "Expected end of input", 3);
+        rejects("\nf(a,)", false, 2, ")", "Expected expression", 5);
+        rejects("int f(int x,\nint x);", true, 2, "x", "Expected unique parameter name", 5);
+        rejects("\nint f(void x);", true, 2, "void", "Expected a non-void parameter type", 7);
+        rejects("\nint f(void){break;}", true, 2, "break", "Expected an enclosing loop", 13);
+        rejects("\n`", false, 2, "`", "Expected a valid token", 1);
+        rejects("\n1e+", false, 2, "invalid lexical input", "Invalid numeric literal", 0);
+        rejects("\n\"unterminated", false, 2, "invalid lexical input", "Unterminated literal", 0);
+        rejects("", false, 1, "end of input", "Expected expression", 0);
+        rejects("\r\n  a b", false, 2, "b", "Expected end of input", 5);
+        rejects("\n\t/* skip */  a b", false, 2, "b", "Expected end of input", 16);
+        rejects("\n a +   ", false, 2, "end of input", "Expected expression", 0);
     }
 
     void lexer_coverage() {
@@ -262,14 +279,20 @@ namespace {
         std::istringstream input(source);
         mx::Scanner scanner(input);
         mx::Token token;
+        size_t column = 1;
         for (const auto &keyword : keywords) {
             check(scanner.lex(token) == mx::TOKEN_TYPE::IDENTIFIER && token.get_token() == keyword, "Lexer keyword coverage: " + keyword);
             check(token.get_line() == 1, "Lexer keyword line: " + keyword);
+            check(token.get_column() == column, "Lexer keyword column: " + keyword);
+            column += keyword.size() + 1;
         }
+        column = 1;
         for (const auto &symbol : symbols) {
             auto kind = scanner.lex(token);
             check(kind != mx::TOKEN_TYPE::TOKEN_ERROR && kind != mx::TOKEN_TYPE::TOKEN_NULL && token.get_token() == symbol, "Lexer symbol coverage: " + symbol);
             check(token.get_line() == 2, "Lexer symbol line: " + symbol);
+            check(token.get_column() == column, "Lexer symbol column: " + symbol);
+            column += symbol.size() + 1;
         }
         check(scanner.lex(token) == mx::TOKEN_TYPE::TOKEN_NULL, "Lexer comment and EOF coverage");
     }

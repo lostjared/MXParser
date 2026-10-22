@@ -63,6 +63,10 @@ int main(int argc, char **argv) {
                 std::cerr << source_path << ": missing parser source location\n";
                 ++failures;
             }
+            if (error.location.token != "end of input" && error.location.token != "invalid lexical input" && error.location.column == 0) {
+                std::cerr << source_path << ": missing token column\n";
+                ++failures;
+            }
         } catch (const std::exception &error) {
             std::cerr << source_path << ": unexpected exception: " << error.what() << '\n';
             ++failures;

@@ -235,7 +235,7 @@ until the final optional step. Document support separately for each capability.
 2. **Introduce structured types and source locations.**
    Status: complete. Parsed types now use the shared model in
    [MXParser/type.hpp](MXParser/type.hpp). AST nodes and parser exceptions carry
-   source locations; see [the API notes](docs/c-subset.md#structured-types-and-source-locations).
+   source locations with token lines and columns; see [the API notes](docs/c-subset.md#structured-types-and-source-locations).
    CTest covers type structure, lexer coverage, and diagnostic locations.
 
    - Replace type strings as the internal representation with scalar, qualified,

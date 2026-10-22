@@ -21,7 +21,7 @@ namespace mx {
     class ParserException : public std::runtime_error {
       public:
         ParserException(const std::string &msg) : runtime_error(msg) {}
-        ParserException(const std::string &message, SourceLocation location) : runtime_error(std::format("{} at line {}, found '{}'", message, location.line, location.token)), location(std::move(location)) {}
+        ParserException(const std::string &message, SourceLocation location) : runtime_error(std::format("{} at line {}{}, found '{}'", message, location.line, location.column ? std::format(", column {}", location.column) : "", location.token)), location(std::move(location)) {}
         SourceLocation location;
     };
 

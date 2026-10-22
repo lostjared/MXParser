@@ -32,7 +32,7 @@ ctest --test-dir build/cmake --output-on-failure
 
 Run only fixture checks with `ctest --test-dir build/cmake -R subset-fixtures
 --output-on-failure`. This checks current syntax expectations and parser
-diagnostics with source locations, without executing source code. Future acceptance expectations are
+diagnostics with source locations and token columns when available, without executing source code. Future acceptance expectations are
 data for upcoming milestones, not expected-failure tests. When implementing a
 feature, update its baseline and add AST or semantic assertions to verify the
 target behavior. Preserve negative cases and the existing expression/function

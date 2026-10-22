@@ -101,8 +101,8 @@ namespace mx {
                     token.set_token("]", TOKEN_TYPE::OPERATOR, CHAR_TYPE::CHAR_RBRACKET);
                 tokens.push_back(token);
             }
-            token.clear();
-            token.set_line(scanner.get_line());
+            if (token.get_line() == 0)
+                token.set_line(scanner.get_line());
             tokens.push_back(token);
         } catch (const mx::ScannerError &e) {
             scan_failure.emplace(std::string("Expected valid lexical input: ") + e.what(), SourceLocation{scanner.get_line(), "invalid lexical input"});
