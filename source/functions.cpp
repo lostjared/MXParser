@@ -3,6 +3,19 @@
 namespace mx {
     namespace {
         std::string statement_text(const ASTNode &node) { return node.to_string() + (dynamic_cast<const ExprNode *>(&node) ? ";" : ""); }
+        std::string function_declarator(const std::string &name, const std::vector<Parameter> &parameters, bool has_prototype) {
+            std::string result = name + "(";
+            if (parameters.empty() && has_prototype)
+                result += "void";
+            for (size_t i = 0; i < parameters.size(); ++i) {
+                if (i)
+                    result += ", ";
+                auto type = parameters[i].declaration_type ? parameters[i].declaration_type : parameters[i].declared_type();
+                result += type->declaration(parameters[i].name.get_token());
+            }
+            return result + ")";
+        }
+
     } // namespace
 
     void ASTVisitor::visit(ProgramNode &) { throw std::runtime_error("Visitor does not support programs"); }
@@ -28,23 +41,28 @@ namespace mx {
         return result + "}";
     }
     std::string FunctionNode::to_string() const {
-        std::string result = result_type()->to_string() + " " + name.get_token() + "(";
-        for (size_t i = 0; i < parameters.size(); ++i) {
-            if (i)
-                result += ", ";
-            result += parameters[i].declared_type()->to_string();
-            if (parameters[i].name.get_type() != TOKEN_TYPE::TOKEN_NULL)
-                result += " " + parameters[i].name.get_token();
-        }
-        return result + ")" + (body ? body->to_string() : ";");
+        auto declarator = function_declarator(name.get_token(), parameters, signature_type()->has_prototype);
+        std::string prefix;
+        for (const auto &specifier : storage)
+            prefix += specifier + " ";
+        return prefix + result_type()->declaration(declarator) + (body ? body->to_string() : ";");
     }
     std::string ReturnNode::to_string() const { return "return" + (expression ? " " + expression->to_string() : "") + ";"; }
     std::string DeclarationNode::to_string() const {
-        std::string result = declared_type()->to_string() + " ";
+        std::string result;
+        for (const auto &specifier : storage)
+            result += specifier + " ";
+        result += declared_type()->to_string();
+        if (!declarators.empty())
+            result += " ";
         for (size_t i = 0; i < declarators.size(); ++i) {
             if (i)
                 result += ", ";
-            result += declarators[i].name.get_token();
+            const auto &declarator = declarators[i];
+            if (declarator.type && declarator.type->kind == TypeKind::Function && declarator.parameters.size() == declarator.type->parameters.size())
+                result += declarator.type->element->declarator(function_declarator(declarator.name.get_token(), declarator.parameters, declarator.type->has_prototype), declared_type());
+            else
+                result += declarator.type ? declarator.type->declarator(declarator.name.get_token(), declared_type()) : declarator.name.get_token();
             if (declarators[i].initializer)
                 result += "=" + declarators[i].initializer->to_string();
         }
@@ -109,7 +127,7 @@ namespace mx {
         for (const auto &parameter : node.parameters)
             stream << "PARAM " << parameter.name.get_token() << ", " << parameter.declared_type()->to_string() << "\n";
         node.body->accept(*this);
-        if (node.result_type()->to_string() == "void")
+        if (node.result_type()->unqualified().kind == TypeKind::Scalar && node.result_type()->unqualified().scalar == ScalarKind::Void)
             stream << "RETURN\n";
         else if (node.name.get_token() == "main")
             stream << "RETURN 0\n";
@@ -122,8 +140,13 @@ namespace mx {
         stream << "ENDSCOPE\n";
     }
     void ICode::visit(DeclarationNode &node) {
+        if (node.is_typedef)
+            return;
         for (auto &declarator : node.declarators) {
-            stream << "VAR " << declarator.name.get_token() << ", " << node.declared_type()->to_string() << "\n";
+            auto type = declarator.type ? declarator.type : node.declared_type();
+            if (type->unqualified().kind == TypeKind::Function)
+                throw std::runtime_error("Code generation does not support block-scope function declarations");
+            stream << "VAR " << declarator.name.get_token() << ", " << type->to_string() << "\n";
             if (declarator.initializer) {
                 declarator.initializer->accept(*this);
                 stream << "SET " << declarator.name.get_token() << ", " << values.back() << "\n";

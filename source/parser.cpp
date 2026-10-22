@@ -86,6 +86,8 @@ namespace mx {
         tokens.clear();
         index = 0;
         scan_failure.reset();
+        name_scopes.assign(1, {});
+        loop_depth = 0;
         try {
             Token token;
             TOKEN_TYPE token_type;
@@ -130,7 +132,7 @@ namespace mx {
         std::vector<std::string> line_state;
         std::string gen_icode, gen_html_code;
         try {
-            if (starts_type_name(index) || top().get_token() == "static" || top().get_token() == "extern" || top().get_token() == "inline") {
+            if (starts_declaration(index)) {
                 auto unit = program();
                 line_state.push_back(unit->to_string());
                 unit->accept(eval);
@@ -370,12 +372,47 @@ namespace mx {
         if (position >= tokens.size())
             return false;
         const auto &text = tokens[position].get_token();
-        return builtin_type(text) || qualifier(text) || text == "struct" || text == "union" || text == "enum" || type_names.contains(text);
+        return builtin_type(text) || qualifier(text) || text == "struct" || text == "union" || text == "enum" || is_type_name(text);
     }
 
-    TypePtr Parser::type_name() {
+    bool Parser::is_type_name(const std::string &name) const {
+        for (auto scope = name_scopes.rbegin(); scope != name_scopes.rend(); ++scope) {
+            auto found = scope->find(name);
+            if (found != scope->end())
+                return bool(found->second);
+        }
+        return type_names.contains(name);
+    }
+    TypePtr Parser::lookup_type(const std::string &name) const {
+        for (auto scope = name_scopes.rbegin(); scope != name_scopes.rend(); ++scope) {
+            auto found = scope->find(name);
+            if (found != scope->end())
+                return found->second;
+        }
+        return {};
+    }
+    void Parser::bind_name(const Token &name, TypePtr type) {
+        auto &scope = name_scopes.back();
+        auto found = scope.find(name.get_token());
+        if (found != scope.end() && (bool(found->second) != bool(type) || (type && !found->second->equals(*type))))
+            fail_at(name, "Conflicting typedef and ordinary declarations");
+        scope[name.get_token()] = std::move(type);
+    }
+    bool Parser::starts_declaration(size_t position) const {
+        if (starts_type_name(position))
+            return true;
+        if (position >= tokens.size())
+            return false;
+        const auto &word = tokens[position].get_token();
+        return word == "typedef" || word == "static" || word == "extern" || word == "inline" || word == "auto" || word == "register";
+    }
+    Parser::DeclarationSpecifiers Parser::declaration_specifiers(bool storage_allowed) {
+        DeclarationSpecifiers result;
+        result.location = SourceLocation::from_token(top());
         std::string spelling;
         Token last_specifier = top();
+        TypePtr named_type;
+        TypeQualifiers named_qualifiers;
         bool have_type = false;
         auto append = [&] {
             if (!spelling.empty())
@@ -383,41 +420,178 @@ namespace mx {
             spelling += top().get_token();
             advance();
         };
-        while (qualifier(top().get_token()) || builtin_type(top().get_token())) {
-            if (builtin_type(top().get_token())) {
+        for (;;) {
+            const auto word = top().get_token();
+            if (word == "typedef" || word == "static" || word == "extern" || word == "inline" || word == "auto" || word == "register") {
+                if (!storage_allowed)
+                    fail("Expected type name without a storage class");
+                if (word == "auto" || word == "register")
+                    fail("Unsupported storage class: " + word);
+                result.storage.push_back(word);
+                result.is_typedef |= word == "typedef";
+                advance();
+            } else if (qualifier(word)) {
+                named_qualifiers.is_const |= word == "const";
+                named_qualifiers.is_volatile |= word == "volatile";
+                named_qualifiers.is_restrict |= word == "restrict";
+                named_qualifiers.is_atomic |= word == "_Atomic";
+                append();
+            } else if (!named_type && builtin_type(word)) {
                 have_type = true;
                 last_specifier = top();
-            }
-            append();
-        }
-        if (!have_type && (top().get_token() == "struct" || top().get_token() == "union" || top().get_token() == "enum")) {
-            append();
-            if (top().get_type() != TOKEN_TYPE::IDENTIFIER || keyword(top().get_token()))
-                fail("Expected type tag");
-            append();
-            have_type = true;
-        } else if (!have_type && type_names.contains(top().get_token())) {
-            append();
-            have_type = true;
+                append();
+            } else if (!have_type && (word == "struct" || word == "union" || word == "enum")) {
+                append();
+                if (top().get_type() != TOKEN_TYPE::IDENTIFIER || keyword(top().get_token()))
+                    fail("Expected type tag");
+                append();
+                have_type = true;
+                // A tagged type is a complete specifier sequence, not scalar keywords.
+                named_type = Type::from_name(spelling);
+            } else if (!have_type && is_type_name(word)) {
+                named_type = Type::named(word, lookup_type(word));
+                have_type = true;
+                append();
+            } else
+                break;
         }
         if (!have_type)
             fail("Expected type name");
-        while (qualifier(top().get_token()))
-            append();
-        while (top().get_token() == "*") {
-            append();
-            while (qualifier(top().get_token()))
-                append();
-        }
         try {
-            return Type::from_name(spelling);
+            result.type = named_type ? Type::qualified(named_type, named_qualifiers) : Type::from_name(spelling);
         } catch (const std::invalid_argument &error) {
             fail_at(last_specifier, std::string("Expected valid type specifiers: ") + error.what());
         }
+        return result;
+    }
+
+    Parser::ParsedDeclarator Parser::parse_declarator(bool abstract_allowed, bool names_allowed) {
+        ParsedDeclarator result;
+        std::vector<DerivedDeclarator> pointers;
+        while (top().get_token() == "*") {
+            DerivedDeclarator pointer{TypeKind::Pointer, {}, {}, {}, top()};
+            advance();
+            while (qualifier(top().get_token())) {
+                auto word = top().get_token();
+                pointer.qualifiers.is_const |= word == "const";
+                pointer.qualifiers.is_volatile |= word == "volatile";
+                pointer.qualifiers.is_restrict |= word == "restrict";
+                pointer.qualifiers.is_atomic |= word == "_Atomic";
+                advance();
+            }
+            pointers.push_back(std::move(pointer));
+        }
+        if (names_allowed && top().get_type() == TOKEN_TYPE::IDENTIFIER && !keyword(top().get_token())) {
+            result.name = identifier();
+        } else if (top().get_token() == "(" && (peek(1).get_token() == "*" || peek(1).get_token() == "(" || peek(1).get_token() == "[" || (names_allowed && peek(1).get_type() == TOKEN_TYPE::IDENTIFIER && !keyword(peek(1).get_token()) && (!abstract_allowed || !is_type_name(peek(1).get_token()))))) {
+            advance();
+            result = parse_declarator(abstract_allowed, names_allowed);
+            expect(")");
+        } else if (!abstract_allowed)
+            fail("Expected declarator name");
+        while (top().get_token() == "[" || top().get_token() == "(") {
+            DerivedDeclarator suffix{top().get_token() == "[" ? TypeKind::Array : TypeKind::Function, {}, {}, {}, top()};
+            advance();
+            if (suffix.kind == TypeKind::Array) {
+                if (top().get_token() != "]")
+                    suffix.bound = std::shared_ptr<const ExprNode>(conditional());
+                expect("]");
+            } else {
+                suffix.has_prototype = top().get_token() != ")";
+                suffix.parameters = parameter_list();
+            }
+            result.modifiers.push_back(std::move(suffix));
+        }
+        for (auto pointer = pointers.rbegin(); pointer != pointers.rend(); ++pointer)
+            result.modifiers.push_back(std::move(*pointer));
+        return result;
+    }
+
+    std::vector<Parameter> Parser::parameter_list() {
+        ScopeGuard scope(*this);
+        std::vector<Parameter> parameters;
+        std::set<std::string> names;
+        if (match(")"))
+            return parameters;
+        for (;;) {
+            if (top().get_token() == "...")
+                fail("Unsupported feature: variadic functions");
+            Parameter parameter;
+            parameter.location = SourceLocation::from_token(top());
+            auto specifiers = declaration_specifiers(false);
+            auto declarator = parse_declarator(true);
+            parameter.name = declarator.name;
+            parameter.declaration_type = derive_type(specifiers.type, declarator);
+            parameter.type = parameter.declaration_type;
+            const auto &base = parameter.type->unqualified();
+            if (base.kind == TypeKind::Scalar && base.scalar == ScalarKind::Void) {
+                if (parameters.empty() && parameter.name.get_type() == TOKEN_TYPE::TOKEN_NULL && top().get_token() == ")" && parameter.type->top_qualifiers() == TypeQualifiers{}) {
+                    advance();
+                    return {};
+                }
+                throw ParserException("Expected a non-void parameter type", parameter.location);
+            }
+            if (base.kind == TypeKind::Array)
+                parameter.type = Type::pointer(Type::qualified(base.element, parameter.type->top_qualifiers()));
+            if (base.kind == TypeKind::Function)
+                throw ParserException("Unsupported feature: function pointer parameters", parameter.location);
+            parameter.type_name = parameter.type->to_string();
+            if (parameter.name.get_type() != TOKEN_TYPE::TOKEN_NULL) {
+                if (!names.insert(parameter.name.get_token()).second)
+                    fail_at(parameter.name, "Expected unique parameter name");
+                bind_name(parameter.name);
+            }
+            parameters.push_back(std::move(parameter));
+            if (!match(","))
+                break;
+        }
+        expect(")");
+        return parameters;
+    }
+
+    TypePtr Parser::derive_type(TypePtr base, const ParsedDeclarator &declarator) {
+        for (auto modifier = declarator.modifiers.rbegin(); modifier != declarator.modifiers.rend(); ++modifier) {
+            const auto kind = base->unqualified().kind;
+            if (modifier->kind == TypeKind::Pointer) {
+                if (kind == TypeKind::Function)
+                    fail_at(modifier->token, "Unsupported feature: function pointers");
+                base = Type::qualified(Type::pointer(base), modifier->qualifiers);
+            } else if (modifier->kind == TypeKind::Array) {
+                if (kind == TypeKind::Function)
+                    fail_at(modifier->token, "An array cannot contain functions");
+                std::optional<size_t> bound;
+                if (auto literal = dynamic_cast<const NumberNode *>(modifier->bound.get())) {
+                    auto text = literal->value.get_token();
+                    while (!text.empty() && (text.back() == 'u' || text.back() == 'U' || text.back() == 'l' || text.back() == 'L'))
+                        text.pop_back();
+                    try {
+                        size_t consumed = 0;
+                        auto value = text.starts_with("0b") || text.starts_with("0B") ? std::stoull(text.substr(2), &consumed, 2) : std::stoull(text, &consumed, 0);
+                        if (consumed == text.size() - (text.starts_with("0b") || text.starts_with("0B") ? 2 : 0) && value <= SIZE_MAX)
+                            bound = static_cast<size_t>(value);
+                    } catch (const std::exception &) {
+                    }
+                }
+                base = Type::array(base, bound, modifier->bound);
+            } else {
+                if (kind == TypeKind::Array || kind == TypeKind::Function)
+                    fail_at(modifier->token, "A function cannot return an array or function");
+                std::vector<TypePtr> types;
+                for (const auto &parameter : modifier->parameters)
+                    types.push_back(parameter.type);
+                base = Type::function(base, std::move(types), modifier->has_prototype);
+            }
+        }
+        return base;
+    }
+
+    TypePtr Parser::type_name() {
+        auto specifiers = declaration_specifiers(false);
+        return derive_type(specifiers.type, parse_declarator(true, false));
     }
 
     std::unique_ptr<ExprNode> Parser::cast() {
-        if (top().get_token() == "(" && starts_type_name(index + 1)) {
+        if (top().get_token() == "(" && starts_declaration(index + 1)) {
             Token start = top();
             advance();
             auto type = type_name();
@@ -434,7 +608,7 @@ namespace mx {
         const auto text = op.get_token();
         if (text == "sizeof") {
             advance();
-            if (top().get_token() == "(" && starts_type_name(index + 1)) {
+            if (top().get_token() == "(" && starts_declaration(index + 1)) {
                 advance();
                 auto type = type_name();
                 expect(")");
@@ -498,7 +672,7 @@ namespace mx {
             result->location = SourceLocation::from_token(current);
             return result;
         }
-        if (current.get_type() == TOKEN_TYPE::IDENTIFIER && !keyword(current.get_token()) && !type_names.contains(current.get_token())) {
+        if (current.get_type() == TOKEN_TYPE::IDENTIFIER && !keyword(current.get_token()) && !is_type_name(current.get_token())) {
             advance();
             return std::make_unique<VariableNode>(current);
         }
@@ -535,11 +709,33 @@ namespace mx {
 
     Token Parser::identifier() {
         Token name = top();
-        if (name.get_type() != TOKEN_TYPE::IDENTIFIER || keyword(name.get_token()) || type_names.contains(name.get_token())) {
+        if (name.get_type() != TOKEN_TYPE::IDENTIFIER || keyword(name.get_token())) {
             fail("Expected identifier");
         }
         advance();
         return name;
+    }
+
+    std::unique_ptr<FunctionNode> Parser::function_node(const Declarator &declarator, const std::vector<std::string> &storage, SourceLocation location) {
+        auto result = std::make_unique<FunctionNode>();
+        result->location = std::move(location);
+        result->storage = storage;
+        result->name = declarator.name;
+        result->parameters = declarator.parameters;
+        const auto &signature = declarator.type->unqualified();
+        if (result->parameters.empty()) {
+            for (const auto &type : signature.parameters) {
+                Parameter parameter;
+                parameter.type = type;
+                parameter.declaration_type = type;
+                parameter.type_name = type->to_string();
+                parameter.location = declarator.location;
+                result->parameters.push_back(std::move(parameter));
+            }
+        }
+        result->type = Type::function(signature.element, signature.parameters, signature.has_prototype);
+        result->return_type = signature.element->to_string();
+        return result;
     }
 
     std::unique_ptr<ProgramNode> Parser::program() {
@@ -548,77 +744,88 @@ namespace mx {
         while (top().get_type() != TOKEN_TYPE::TOKEN_NULL) {
             if (match(";"))
                 continue;
-            auto location = SourceLocation::from_token(top());
-            while (top().get_token() == "static" || top().get_token() == "extern" || top().get_token() == "inline")
-                advance();
-            auto type = type_name();
-            auto name = identifier();
-            if (!match("(")) {
-                result->declarations.push_back(declaration(std::move(type), name, location));
-                continue;
-            }
-            auto function = std::make_unique<FunctionNode>();
-            function->return_type = type->to_string();
-            function->location = location;
-            function->name = name;
-            std::set<std::string> names;
-            if (top().get_token() == "void" && peek(1).get_token() == ")")
-                advance();
-            else if (top().get_token() != ")") {
-                do {
-                    Parameter parameter;
-                    parameter.location = SourceLocation::from_token(top());
-                    parameter.type = type_name();
-                    parameter.type_name = parameter.type->to_string();
-                    if (parameter.type->unqualified().kind == TypeKind::Scalar && parameter.type->unqualified().scalar == ScalarKind::Void)
-                        throw ParserException("Expected a non-void parameter type", parameter.location);
-                    if (top().get_type() == TOKEN_TYPE::IDENTIFIER && !keyword(top().get_token())) {
-                        parameter.name = identifier();
-                        if (!names.insert(parameter.name.get_token()).second)
-                            fail_at(parameter.name, "Expected unique parameter name");
+            auto node = declaration(true);
+            auto group = dynamic_cast<DeclarationNode *>(node.get());
+            bool functions = false;
+            if (group && !group->is_typedef)
+                for (const auto &declarator : group->declarators)
+                    functions |= declarator.type->unqualified().kind == TypeKind::Function;
+            if (!functions)
+                result->declarations.push_back(std::move(node));
+            else {
+                for (auto &declarator : group->declarators) {
+                    if (declarator.type->unqualified().kind == TypeKind::Function)
+                        result->declarations.push_back(function_node(declarator, group->storage, group->location));
+                    else {
+                        auto object = std::make_unique<DeclarationNode>();
+                        object->location = group->location;
+                        object->type = group->type;
+                        object->type_name = group->type_name;
+                        object->storage = group->storage;
+                        object->declarators.push_back(std::move(declarator));
+                        result->declarations.push_back(std::move(object));
                     }
-                    function->parameters.push_back(std::move(parameter));
-                } while (match(","));
-            }
-            expect(")");
-            if (!match(";")) {
-                for (const auto &parameter : function->parameters) {
-                    if (parameter.name.get_type() == TOKEN_TYPE::TOKEN_NULL)
-                        fail("Expected named parameters in function definition");
                 }
-                function->body = block();
             }
-            std::vector<TypePtr> parameter_types;
-            for (const auto &parameter : function->parameters)
-                parameter_types.push_back(parameter.type);
-            function->type = Type::function(std::move(type), std::move(parameter_types));
-            result->declarations.push_back(std::move(function));
         }
         return result;
     }
 
-    std::unique_ptr<DeclarationNode> Parser::declaration(TypePtr type, Token name, SourceLocation location) {
+    std::unique_ptr<ASTNode> Parser::declaration(bool file_scope) {
+        auto specifiers = declaration_specifiers(true);
+        if (!file_scope)
+            for (const auto &storage : specifiers.storage)
+                if (storage != "typedef")
+                    throw ParserException("Unsupported block-scope storage class: " + storage, specifiers.location);
         auto result = std::make_unique<DeclarationNode>();
-        result->type_name = type->to_string();
-        result->type = std::move(type);
-        result->location = std::move(location);
+        result->location = specifiers.location;
+        result->type = specifiers.type;
+        result->type_name = specifiers.type->to_string();
+        result->is_typedef = specifiers.is_typedef;
+        result->storage = specifiers.storage;
+        if (top().get_token() == ";" && !specifiers.is_typedef && specifiers.type->unqualified().kind == TypeKind::Tagged && specifiers.type->unqualified().tag == TagKind::Struct) {
+            advance();
+            return result;
+        }
         for (;;) {
+            auto parsed = parse_declarator(false);
             Declarator declarator;
-            declarator.name = name;
-            declarator.location = SourceLocation::from_token(name);
-            declarator.type = result->type;
-            if (match("="))
+            declarator.name = parsed.name;
+            declarator.location = SourceLocation::from_token(parsed.name);
+            declarator.type = derive_type(specifiers.type, parsed);
+            if (!parsed.modifiers.empty() && parsed.modifiers.front().kind == TypeKind::Function)
+                declarator.parameters = parsed.modifiers.front().parameters;
+            bind_name(declarator.name, specifiers.is_typedef ? declarator.type : TypePtr{});
+            if (top().get_token() == "{") {
+                if (!file_scope || specifiers.is_typedef || !result->declarators.empty() || declarator.type->unqualified().kind != TypeKind::Function || parsed.modifiers.empty() || parsed.modifiers.front().kind != TypeKind::Function)
+                    fail("Expected a standalone function definition; aggregate initializers are not implemented");
+                auto function = function_node(declarator, specifiers.storage, specifiers.location);
+                ScopeGuard scope(*this);
+                for (const auto &parameter : function->parameters) {
+                    if (parameter.name.get_type() == TOKEN_TYPE::TOKEN_NULL)
+                        fail("Expected named parameters in function definition");
+                    bind_name(parameter.name);
+                }
+                function->body = block(false);
+                return function;
+            }
+            if (match("=")) {
+                if (specifiers.is_typedef)
+                    fail("A typedef cannot have an initializer");
+                if (declarator.type->unqualified().kind == TypeKind::Function)
+                    fail("A function cannot have an initializer");
                 declarator.initializer = assignment_expr();
+            }
             result->declarators.push_back(std::move(declarator));
             if (!match(","))
                 break;
-            name = identifier();
         }
         expect(";");
         return result;
     }
 
-    std::unique_ptr<BlockNode> Parser::block() {
+    std::unique_ptr<BlockNode> Parser::block(bool new_scope) {
+        ScopeGuard scope(*this, new_scope);
         auto location = SourceLocation::from_token(top());
         expect("{");
         auto result = std::make_unique<BlockNode>();
@@ -676,14 +883,14 @@ namespace mx {
             return result;
         }
         if (match("for")) {
+            ScopeGuard scope(*this);
             auto result = std::make_unique<ForNode>();
             result->location = location;
             expect("(");
-            if (starts_type_name(index)) {
-                auto declaration_location = SourceLocation::from_token(top());
-                auto type = type_name();
-                auto name = identifier();
-                result->initializer = declaration(std::move(type), name, declaration_location);
+            if (starts_declaration(index)) {
+                result->initializer = declaration(false);
+                if (auto declaration = dynamic_cast<DeclarationNode *>(result->initializer.get()); declaration && declaration->is_typedef)
+                    throw ParserException("A for initializer must declare objects, not typedef names", declaration->location);
             } else {
                 if (top().get_token() != ";")
                     result->initializer = expr();
@@ -715,12 +922,10 @@ namespace mx {
             expect(";");
             return result;
         }
-        if (starts_type_name(index)) {
+        if (starts_declaration(index)) {
             if (!allow_declaration)
                 fail("Expected statement; a declaration requires a block");
-            auto type = type_name();
-            auto name = identifier();
-            return declaration(std::move(type), name, location);
+            return declaration(false);
         }
         auto result = expr();
         expect(";");

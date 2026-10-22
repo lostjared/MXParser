@@ -199,6 +199,7 @@ namespace mx {
         Token name;
         TypePtr type;
         SourceLocation location;
+        TypePtr declaration_type;
     };
 
     class BlockNode : public ASTNode {
@@ -211,6 +212,7 @@ namespace mx {
     class FunctionNode : public ASTNode {
       public:
         std::string return_type;
+        std::vector<std::string> storage;
         TypePtr type;
         TypePtr result_type() const { return type ? type->element : Type::from_name(return_type); }
         TypePtr signature_type() const {
@@ -247,6 +249,7 @@ namespace mx {
         std::unique_ptr<ExprNode> initializer;
         TypePtr type;
         SourceLocation location;
+        std::vector<Parameter> parameters;
     };
 
     class DeclarationNode : public ASTNode {
@@ -254,6 +257,8 @@ namespace mx {
         TypePtr declared_type() const { return type ? type : Type::from_name(type_name); }
         std::string type_name;
         TypePtr type;
+        bool is_typedef = false;
+        std::vector<std::string> storage;
         std::vector<Declarator> declarators;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override;

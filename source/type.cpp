@@ -1,4 +1,5 @@
 #include "MXParser/type.hpp"
+#include "MXParser/ast.hpp"
 #include <algorithm>
 #include <cctype>
 #include <sstream>
@@ -82,7 +83,7 @@ namespace mx {
         }
     } // namespace
 
-    Type::Type(TypeKind kind, ScalarKind scalar, TypePtr element, TypeQualifiers qualifiers, TagKind tag, std::string name, std::optional<size_t> bound, std::vector<TypePtr> parameters, std::string spelling) : kind(kind), scalar(scalar), tag(tag), qualifiers(qualifiers), name(std::move(name)), element(std::move(element)), bound(bound), parameters(std::move(parameters)), spelling(std::move(spelling)) {}
+    Type::Type(TypeKind kind, ScalarKind scalar, TypePtr element, TypeQualifiers qualifiers, TagKind tag, std::string name, std::optional<size_t> bound, std::vector<TypePtr> parameters, std::string spelling, std::shared_ptr<const ExprNode> expression, bool has_prototype) : kind(kind), scalar(scalar), tag(tag), qualifiers(qualifiers), name(std::move(name)), element(std::move(element)), bound(bound), bound_expression(std::move(expression)), parameters(std::move(parameters)), has_prototype(has_prototype), spelling(std::move(spelling)) {}
 
     TypePtr Type::scalar_type(ScalarKind scalar) { return TypePtr(new Type(TypeKind::Scalar, scalar)); }
     TypePtr Type::qualified(TypePtr base, TypeQualifiers qualifiers) {
@@ -102,27 +103,38 @@ namespace mx {
         require_type(target);
         return TypePtr(new Type(TypeKind::Pointer, ScalarKind::Int, std::move(target)));
     }
-    TypePtr Type::array(TypePtr element, std::optional<size_t> bound) {
+    TypePtr Type::array(TypePtr element, std::optional<size_t> bound, std::shared_ptr<const ExprNode> expression) {
         require_type(element);
-        return TypePtr(new Type(TypeKind::Array, ScalarKind::Int, std::move(element), {}, TagKind::Struct, {}, bound));
+        return TypePtr(new Type(TypeKind::Array, ScalarKind::Int, std::move(element), {}, TagKind::Struct, {}, bound, {}, {}, std::move(expression)));
     }
-    TypePtr Type::function(TypePtr result, std::vector<TypePtr> parameters) {
+    TypePtr Type::function(TypePtr result, std::vector<TypePtr> parameters, bool has_prototype) {
         require_type(result);
         for (const auto &parameter : parameters)
             require_type(parameter);
-        return TypePtr(new Type(TypeKind::Function, ScalarKind::Int, std::move(result), {}, TagKind::Struct, {}, {}, std::move(parameters)));
+        return TypePtr(new Type(TypeKind::Function, ScalarKind::Int, std::move(result), {}, TagKind::Struct, {}, {}, std::move(parameters), {}, {}, has_prototype));
     }
     TypePtr Type::tagged(TagKind tag, std::string name) {
         if (!identifier(name))
             throw std::invalid_argument("Expected type tag");
         return TypePtr(new Type(TypeKind::Tagged, ScalarKind::Int, {}, {}, tag, std::move(name)));
     }
-    TypePtr Type::named(std::string name) {
+    TypePtr Type::named(std::string name, TypePtr definition) {
         if (!identifier(name))
             throw std::invalid_argument("Expected typedef name");
-        return TypePtr(new Type(TypeKind::Named, ScalarKind::Int, {}, {}, TagKind::Struct, std::move(name)));
+        return TypePtr(new Type(TypeKind::Named, ScalarKind::Int, std::move(definition), {}, TagKind::Struct, std::move(name)));
     }
-    const Type &Type::unqualified() const { return kind == TypeKind::Qualified ? element->unqualified() : *this; }
+    const Type &Type::unqualified() const { return kind == TypeKind::Qualified || (kind == TypeKind::Named && element) ? element->unqualified() : *this; }
+    TypeQualifiers Type::top_qualifiers() const {
+        auto result = qualifiers;
+        if (kind == TypeKind::Qualified || (kind == TypeKind::Named && element)) {
+            auto inherited = element->top_qualifiers();
+            result.is_const |= inherited.is_const;
+            result.is_volatile |= inherited.is_volatile;
+            result.is_restrict |= inherited.is_restrict;
+            result.is_atomic |= inherited.is_atomic;
+        }
+        return result;
+    }
     bool Type::equals(const Type &other) const {
         if (kind != other.kind)
             return false;
@@ -134,13 +146,13 @@ namespace mx {
         case TypeKind::Pointer:
             return element->equals(*other.element);
         case TypeKind::Array:
-            return bound == other.bound && element->equals(*other.element);
+            return bound == other.bound && (bound || ((!bound_expression && !other.bound_expression) || (bound_expression && other.bound_expression && bound_expression->to_string() == other.bound_expression->to_string()))) && element->equals(*other.element);
         case TypeKind::Tagged:
             return tag == other.tag && name == other.name;
         case TypeKind::Named:
-            return name == other.name;
+            return name == other.name && ((!element && !other.element) || (element && other.element && element->equals(*other.element)));
         case TypeKind::Function:
-            if (!element->equals(*other.element) || parameters.size() != other.parameters.size())
+            if (has_prototype != other.has_prototype || !element->equals(*other.element) || parameters.size() != other.parameters.size())
                 return false;
             for (size_t i = 0; i < parameters.size(); ++i)
                 if (!parameters[i]->equals(*other.parameters[i]))
@@ -149,39 +161,54 @@ namespace mx {
         }
         return false;
     }
-    std::string Type::render(std::string declarator) const {
+    std::string Type::render(std::string declarator, const Type *stop) const {
+        if (this == stop)
+            return declarator;
+        auto syntax_kind = [](const Type &type) {
+            const Type *current = &type;
+            while (current->kind == TypeKind::Qualified)
+                current = current->element.get();
+            return current->kind;
+        };
         if (kind == TypeKind::Qualified) {
             if (element->kind == TypeKind::Pointer) {
                 declarator = "* " + qualifier_names(qualifiers) + (declarator.empty() ? "" : " " + declarator);
-                if (element->element->unqualified().kind == TypeKind::Array || element->element->unqualified().kind == TypeKind::Function)
+                if (syntax_kind(*element->element) == TypeKind::Array || syntax_kind(*element->element) == TypeKind::Function)
                     declarator = "(" + declarator + ")";
-                return element->element->render(declarator);
+                return element->element->render(declarator, stop);
             }
-            return qualifier_names(qualifiers) + " " + element->render(declarator);
+            return qualifier_names(qualifiers) + " " + element->render(declarator, stop);
         }
         if (kind == TypeKind::Pointer) {
             declarator = "*" + declarator;
-            if (element->unqualified().kind == TypeKind::Array || element->unqualified().kind == TypeKind::Function)
+            if (syntax_kind(*element) == TypeKind::Array || syntax_kind(*element) == TypeKind::Function)
                 declarator = "(" + declarator + ")";
-            return element->render(declarator);
+            return element->render(declarator, stop);
         }
         if (kind == TypeKind::Array)
-            return element->render(declarator + "[" + (bound ? std::to_string(*bound) : "") + "]");
+            return element->render(declarator + "[" + (bound_expression ? bound_expression->to_string() : bound ? std::to_string(*bound) : "") + "]", stop);
         if (kind == TypeKind::Function) {
             declarator += "(";
-            if (parameters.empty())
+            if (parameters.empty() && has_prototype)
                 declarator += "void";
             for (size_t i = 0; i < parameters.size(); ++i) {
                 if (i)
                     declarator += ", ";
                 declarator += parameters[i]->to_string();
             }
-            return element->render(declarator + ")");
+            return element->render(declarator + ")", stop);
         }
+        if (stop)
+            throw std::invalid_argument("Declarator base is not part of this type");
         std::string base = kind == TypeKind::Scalar ? scalar_name(scalar) : kind == TypeKind::Named ? name : (tag == TagKind::Struct ? "struct " : tag == TagKind::Union ? "union " : "enum ") + name;
         return base + (declarator.empty() ? "" : " " + declarator);
     }
     std::string Type::to_string() const { return spelling.empty() ? render("") : spelling; }
+    std::string Type::declaration(const std::string &name) const { return render(name); }
+    std::string Type::declarator(const std::string &name, const TypePtr &base) const {
+        require_type(base);
+        return render(name, base.get());
+    }
 
     TypePtr Type::from_name(const std::string &spelling) {
         std::string separated;

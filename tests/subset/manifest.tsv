@@ -5,10 +5,10 @@ fixtures/scalars.c	2	accept	accept	accept	-
 fixtures/numeric-program.c	1	accept	accept	accept	-
 fixtures/dangling-else.c	5	accept	accept	accept	-
 fixtures/mixed-declarators.c	3	accept	accept	accept	-
-fixtures/declarators.c	3	reject	accept	accept	-
-fixtures/abstract-types.c	3	reject	accept	accept	-
-fixtures/array-parameter.c	3	reject	accept	accept	-
-fixtures/typedef-scope.c	3	reject	accept	accept	-
+fixtures/declarators.c	3	accept	accept	accept	-
+fixtures/abstract-types.c	3	accept	accept	accept	-
+fixtures/array-parameter.c	3	accept	accept	accept	-
+fixtures/typedef-scope.c	3	accept	accept	accept	-
 fixtures/storage.c	3	accept	accept	accept	-
 fixtures/structured-statements.c	5	reject	accept	accept	-
 fixtures/aggregates.c	6	reject	accept	accept	-
@@ -38,8 +38,8 @@ fixtures/switch-continue.c	5	reject	accept	reject	continue in a switch still req
 fixtures/unknown-member.c	6	reject	accept	reject	struct has no member named missing
 fixtures/incomplete-object.c	6	accept	accept	reject	object has incomplete struct type
 fixtures/recursive-object.c	6	reject	accept	reject	struct cannot contain itself by value
-fixtures/bad-bound.c	6	reject	accept	reject	array bound must be positive
-fixtures/nonconstant-bound.c	6	reject	accept	reject	variable length arrays are unsupported
+fixtures/bad-bound.c	6	accept	accept	reject	array bound must be positive
+fixtures/nonconstant-bound.c	6	accept	accept	reject	variable length arrays are unsupported
 fixtures/bad-initializer.c	6	reject	accept	reject	too many elements in array initializer
 fixtures/excluded-union.c	7	reject	reject	reject	unsupported feature: union
 fixtures/excluded-bit-field.c	7	reject	reject	reject	unsupported feature: bit field

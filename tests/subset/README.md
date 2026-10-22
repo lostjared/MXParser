@@ -19,8 +19,10 @@ Diagnostic meanings do not prescribe exact wording or claim that today's parser
 already produces them. Semantic errors such as an invalid lvalue or undeclared
 name can have `current_parse=accept` and `target_validation=reject`. Some excluded
 features also parse today and must be rejected by the future validated subset.
-An acceptance records syntax only: for example, `mixed-declarators.c` parses
-today, but the current AST does not give `p` and `count` independent types.
+An acceptance records syntax only. Step 3 now also verifies independent types
+for `mixed-declarators.c` and scoped typedef behavior in the `declarators` suite.
+Array-bound fixtures may parse before their constraints can be checked; constant
+expression and positive-bound validation remain work for step 6.
 
 Run all baseline checks from the repository root:
 

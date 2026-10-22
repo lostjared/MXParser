@@ -33,7 +33,7 @@ namespace mx {
             if (!type)
                 throw std::runtime_error("Missing evaluator type");
             const auto &base = type->unqualified();
-            if (base.kind != TypeKind::Scalar || type->qualifiers.is_atomic)
+            if (base.kind != TypeKind::Scalar || type->top_qualifiers().is_atomic)
                 throw std::runtime_error("Evaluator does not support type: " + type->to_string());
             switch (base.scalar) {
             case ScalarKind::Void:
@@ -182,7 +182,7 @@ namespace mx {
     void Evaluate::store(const std::string &name, NumericValue value) {
         number(value);
         if (auto *binding = lookup(name)) {
-            if (binding->type && binding->type->qualifiers.is_const)
+            if (binding->type && binding->type->top_qualifiers().is_const)
                 throw std::runtime_error("Cannot assign const variable: " + name);
             binding->value = binding->type ? convert(value, binding->type) : value;
         } else {
@@ -432,16 +432,19 @@ namespace mx {
         frames.back().scopes.pop_back();
     }
     void Evaluate::visit(DeclarationNode &node) {
-        if (scalar_type(node.declared_type()) == Scalar::Void)
-            throw std::runtime_error("Variable cannot have type void");
+        if (node.is_typedef)
+            return;
         for (auto &declarator : node.declarators) {
+            auto type = declarator.type ? declarator.type : node.declared_type();
+            if (scalar_type(type) == Scalar::Void)
+                throw std::runtime_error("Variable cannot have type void");
             auto name = declarator.name.get_token();
             auto &scope = frames.empty() ? globals : frames.back().scopes.back();
             if (scope.contains(name) || (frames.empty() && functions.contains(name)))
                 throw std::runtime_error("Duplicate declaration: " + name);
-            scope[name] = {frames.empty() ? convert(std::int64_t(0), node.declared_type()) : NumericValue(std::monostate{}), node.declared_type()};
+            scope[name] = {frames.empty() ? convert(std::int64_t(0), type) : NumericValue(std::monostate{}), type};
             if (declarator.initializer) {
-                auto value = convert(evaluate(*declarator.initializer), node.declared_type());
+                auto value = convert(evaluate(*declarator.initializer), type);
                 lookup(name)->value = value;
             }
         }

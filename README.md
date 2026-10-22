@@ -104,6 +104,8 @@ std::cout << expression->to_string() << '\n';
 expressions. The final semicolon is optional; empty statements are ignored.
 Both APIs consume their input stream. Register typedef names before parsing
 with `parser.add_type_name("size_t")` to distinguish casts from parentheses.
+For translation units, `parse_program()` reads scoped typedef declarations
+directly and tracks ordinary names that shadow them.
 
 Supported syntax includes:
 
@@ -116,12 +118,13 @@ Supported syntax includes:
 - Integer, floating-point, character, and string literals, including adjacent
   string literals, as tokenized by MXLex.
 - Casts and `sizeof` with scalar types, tagged `struct`/`union`/`enum` types,
-  registered typedef names, qualifiers, and pointer types.
+  registered typedef names, qualifiers, pointers, and array abstract declarators.
 
 This is expression syntax parsing, without name resolution or type/lvalue
 checking. Preprocessing, compound literals, `_Generic`, complex and atomic
-type specifiers, and array/function abstract declarators in type names are not
-implemented. Numeric declarations and function bodies are supported through
+type specifiers, and function-pointer declarations remain unsupported. Function
+abstract declarators can be represented; their use still needs semantic validation.
+Declarations and function bodies are supported through
 `parse_program()`, described below.
 
 Try the syntax parser from either build system:
@@ -248,6 +251,11 @@ until the final optional step. Document support separately for each capability.
      use the shared type model and malformed input reports useful locations.
 
 3. **Unify declaration and declarator parsing.**
+   Status: complete. Declarations, parameters, casts, and `sizeof` now share
+   declarator parsing. See the [declaration API notes](docs/c-subset.md#declarations-and-typedef-scopes)
+   and [examples/declarations.c](examples/declarations.c). CTest covers type
+   binding, scoped typedefs, array parameters, round trips, and excluded forms.
+
    - Parse declaration specifiers separately from each declarator, including
      pointer qualifiers, fixed-size array suffixes, function prototypes, and
      parenthesized declarators within the chosen subset. Reuse the machinery

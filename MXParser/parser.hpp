@@ -10,6 +10,7 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -73,11 +74,56 @@ namespace mx {
         bool match(const std::string &text);
         void expect(const std::string &text);
         bool starts_type_name(size_t position) const;
+        bool starts_declaration(size_t position) const;
+        bool is_type_name(const std::string &name) const;
+        TypePtr lookup_type(const std::string &name) const;
+        void bind_name(const Token &name, TypePtr type = {});
+        std::vector<std::unordered_map<std::string, TypePtr>> name_scopes{1};
+        class ScopeGuard {
+          public:
+            ScopeGuard(Parser &parser, bool active = true) : parser(parser), active(active) {
+                if (active)
+                    parser.name_scopes.emplace_back();
+            }
+            ~ScopeGuard() {
+                if (active)
+                    parser.name_scopes.pop_back();
+            }
+            ScopeGuard(const ScopeGuard &) = delete;
+            ScopeGuard &operator=(const ScopeGuard &) = delete;
+
+          private:
+            Parser &parser;
+            bool active;
+        };
+        struct DeclarationSpecifiers {
+            TypePtr type;
+            SourceLocation location;
+            std::vector<std::string> storage;
+            bool is_typedef = false;
+        };
+        struct DerivedDeclarator {
+            TypeKind kind;
+            TypeQualifiers qualifiers;
+            std::shared_ptr<const ExprNode> bound;
+            std::vector<Parameter> parameters;
+            Token token;
+            bool has_prototype = true;
+        };
+        struct ParsedDeclarator {
+            Token name;
+            std::vector<DerivedDeclarator> modifiers;
+        };
+        DeclarationSpecifiers declaration_specifiers(bool storage_allowed);
+        ParsedDeclarator parse_declarator(bool abstract_allowed, bool names_allowed = true);
+        std::vector<Parameter> parameter_list();
+        TypePtr derive_type(TypePtr base, const ParsedDeclarator &declarator);
+        std::unique_ptr<FunctionNode> function_node(const Declarator &declarator, const std::vector<std::string> &storage, SourceLocation location);
         TypePtr type_name();
         std::unique_ptr<ProgramNode> program();
-        std::unique_ptr<BlockNode> block();
+        std::unique_ptr<BlockNode> block(bool new_scope = true);
         std::unique_ptr<ASTNode> function_statement(bool allow_declaration = false);
-        std::unique_ptr<DeclarationNode> declaration(TypePtr type, Token name, SourceLocation location);
+        std::unique_ptr<ASTNode> declaration(bool file_scope);
         Token identifier();
         size_t loop_depth = 0;
         std::set<std::string> type_names;
