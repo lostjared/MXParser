@@ -218,6 +218,11 @@ names and types before execution. The evaluator can remain a numeric subset
 until the final optional step. Document support separately for each capability.
 
 1. **Define the grammar and acceptance cases.**
+   Status: complete. See the [subset contract and support matrix](docs/c-subset.md)
+   and [acceptance fixture manifest](tests/subset/manifest.tsv). The CTest
+   `subset-fixtures` suite checks current parsing expectations; target parsing
+   and semantic expectations remain explicit work for later milestones.
+
    - Write a compact grammar and feature matrix covering the target above,
      current support, planned additions, and explicit exclusions. Specify the
      accepted storage classes, qualifiers, initializer forms, and declarator
