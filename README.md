@@ -196,3 +196,110 @@ cmake -S . -B build/cmake -DBUILD_TESTING=ON
 cmake --build build/cmake
 ctest --test-dir build/cmake --output-on-failure
 ```
+
+## Roadmap: basic C language subset
+
+The following steps are planned work, building on the expression parser and
+numeric function interpreter described above. Complete them in order, keeping
+the existing expression and program APIs working throughout.
+
+The first target is a documented subset of C99 syntax for a single translation
+unit: scalar types, typedefs, pointers, fixed-size arrays, simple structs and
+enums, declarations, functions with prototypes, and structured control flow.
+Source input must be free of preprocessing directives; a preprocessor, standard
+library, linker, and native code backend are outside this milestone. Also defer
+unions, bit-fields, variable-length arrays, function pointers, variadic functions,
+compound literals, designated initializers, and `goto`/labels. This target does
+not claim full C99 conformance.
+
+Parsing, semantic validation, and execution are separate capabilities. The parser
+should produce an AST for the entire chosen subset; a semantic pass should check
+names and types before execution. The evaluator can remain a numeric subset
+until the final optional step. Document support separately for each capability.
+
+1. **Define the grammar and acceptance cases.**
+   - Write a compact grammar and feature matrix covering the target above,
+     current support, planned additions, and explicit exclusions. Specify the
+     accepted storage classes, qualifiers, initializer forms, and declarator
+     restrictions so that "basic C" has a testable boundary.
+   - Preserve the existing expression and function tests as the baseline. Add
+     small valid and invalid source fixtures for each upcoming milestone.
+   - Done when every target feature has an acceptance example and unsupported
+     constructs have an expected diagnostic, with no implied runtime support.
+
+2. **Introduce structured types and source locations.**
+   - Replace type strings as the internal representation with scalar, qualified,
+     pointer, array, function, and tagged types. Keep printable type names for
+     AST output and compatibility where needed.
+   - Preserve source locations from MXLex on AST nodes and report the offending
+     token, line, and expected syntax in parser errors. Check lexer coverage
+     for the chosen keywords, literals, and punctuation before extending grammar.
+   - Done when existing casts, `sizeof`, declarations, and function signatures
+     use the shared type model and malformed input reports useful locations.
+
+3. **Unify declaration and declarator parsing.**
+   - Parse declaration specifiers separately from each declarator, including
+     pointer qualifiers, fixed-size array suffixes, function prototypes, and
+     parenthesized declarators within the chosen subset. Reuse the machinery
+     for cast and `sizeof` type names, including abstract declarators.
+   - Support scoped `typedef` declarations and ordinary-name shadowing, building
+     on `add_type_name()` for expression-only callers. Give each declarator its
+     own derived type, so `int *p, count;` declares distinct types.
+   - Done when globals, locals, parameters, prototypes, and definitions share
+     the same declaration rules; tests distinguish `int *items[4]` from
+     `int (*items)[4]` and reject deferred function-pointer declarations clearly.
+
+4. **Add name resolution and semantic validation.**
+   - Extend the symbol-table infrastructure with translation-unit, function,
+     and block scopes, plus the separate tag namespace. Resolve variables,
+     functions, typedef names, and compatible repeated declarations.
+   - Check operand types, modifiable lvalues, calls, return values, casts,
+     qualifiers, and loop/jump context without executing the AST. Define a
+     scalar data model for sizes, signedness, promotions, and conversions.
+   - Done when undeclared names, incompatible prototypes, invalid assignments,
+     and invalid returns are diagnosed even inside branches that never execute.
+     Keep any permissive legacy expression-evaluation behavior explicit.
+
+5. **Complete structured statements.**
+   - Add `do`/`while`, `switch`, `case`, and `default` AST nodes and parsing.
+     Retain existing blocks, empty statements, `if`/`else`, `while`, `for`,
+     `return`, `break`, and `continue`.
+   - Track loop and switch contexts separately: `break` can leave either, while
+     `continue` targets the enclosing loop. Validate integral case constants,
+     duplicate cases, and multiple defaults; preserve switch fallthrough.
+   - Done when nested loop/switch examples and dangling-`else` cases produce
+     the expected ASTs and invalid jump contexts are rejected.
+
+6. **Add basic aggregate declarations and initialization.**
+   - Parse simple struct and enum definitions, tagged forward declarations,
+     fixed-size arrays, scalar initializers, positional brace initializers,
+     and character-array string initializers. Decode character/string escapes
+     and evaluate the integer constant expressions needed for enums and bounds.
+   - Resolve member access and validate array bounds, initializer shape, complete
+     types, and illegal recursive objects; allow self-references through pointers.
+   - Done when a small program can declare an array of structs, access its
+     members, and use enum constants, with invalid layouts and initializers
+     covered by rejection tests. Execution can still be unsupported.
+
+7. **Validate and publish the parser subset.**
+   - Extend AST printing and visitor interfaces for every new node. Each visitor
+     must either handle the node or report an explicit unsupported operation.
+   - Add end-to-end syntax examples combining declarations, functions, arrays,
+     structs, and control flow. Check AST structure, parse/print/parse stability,
+     malformed input, and unexpected end-of-file errors through CTest.
+   - Compare acceptance of supported fixtures with a system C compiler in C99
+     syntax-only mode; exclude extensions and undefined behavior from fixtures.
+     Update the README feature matrix and examples to match verified support.
+   - Done when all target grammar features and semantic checks pass their
+     acceptance cases, existing regressions pass, and exclusions fail clearly.
+
+8. **Optionally expand execution after the parser milestone.**
+   - Align scalar evaluation with the documented data model, then implement
+     object storage, lvalue references, pointers, arrays, strings, aggregate
+     initialization, member access, and `sizeof`. Add execution for the new
+     control-flow nodes and update intermediate-code visitors accordingly.
+   - Verify numeric conversions, object lifetime, short-circuit behavior,
+     fallthrough, and loop jumps with runtime tests. Compare defined results
+     against compiled C examples and document interpreter limits.
+   - Done when the support matrix identifies exactly which parsed constructs
+     can execute and every remaining execution gap produces a clear error.
