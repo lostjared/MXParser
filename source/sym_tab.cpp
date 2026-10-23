@@ -5,6 +5,30 @@
 
 namespace mx {
 
+    void SemanticSymbolTable::push_scope() { scopes.emplace_back(); }
+    void SemanticSymbolTable::pop_scope() {
+        if (scopes.size() <= 1)
+            throw std::logic_error("Cannot pop translation-unit scope");
+        scopes.pop_back();
+    }
+    size_t SemanticSymbolTable::depth() const { return scopes.size(); }
+    SemanticSymbolTable::Entry SemanticSymbolTable::at_scope(size_t scope, const std::string &name, bool tag) const {
+        const auto &entries = tag ? scopes.at(scope).tags : scopes.at(scope).ordinary;
+        auto found = entries.find(name);
+        return found == entries.end() ? Entry{} : found->second;
+    }
+    SemanticSymbolTable::Entry SemanticSymbolTable::lookup_current(const std::string &name, bool tag) const { return at_scope(scopes.size() - 1, name, tag); }
+    SemanticSymbolTable::Entry SemanticSymbolTable::lookup(const std::string &name, bool tag) const {
+        for (size_t scope = scopes.size(); scope > 0; --scope)
+            if (auto found = at_scope(scope - 1, name, tag))
+                return found;
+        return {};
+    }
+    bool SemanticSymbolTable::enter(size_t scope, const std::string &name, Entry symbol, bool tag) {
+        auto &entries = tag ? scopes.at(scope).tags : scopes.at(scope).ordinary;
+        return entries.emplace(name, std::move(symbol)).second;
+    }
+
     void SymbolTable::enter(const std::string &vname, const Symbol &symbol) {
         auto keyval = symbol;
         if (is_keyword(vname)) {

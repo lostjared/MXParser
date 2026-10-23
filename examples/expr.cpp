@@ -1,5 +1,6 @@
 #include <MXParser/ast.hpp>
 #include <MXParser/parser.hpp>
+#include <MXParser/semantic.hpp>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -9,12 +10,13 @@ int main(int argc, char **argv) {
 
     bool syntax_only = argc == 3 && std::string(argv[1]) == "--syntax";
     bool syntax_program = argc == 3 && std::string(argv[1]) == "--syntax-program";
-    if (argc != 2 && !syntax_only && !syntax_program) {
-        std::cerr << "Program requires one argument:\n" << argv[0] << " [--syntax | --syntax-program] filename\n";
+    bool check_program = argc == 3 && std::string(argv[1]) == "--check-program";
+    if (argc != 2 && !syntax_only && !syntax_program && !check_program) {
+        std::cerr << "Program requires one argument:\n" << argv[0] << " [--syntax | --syntax-program | --check-program] filename\n";
         return EXIT_FAILURE;
     }
 
-    const char *filename = argv[(syntax_only || syntax_program) ? 2 : 1];
+    const char *filename = argv[(syntax_only || syntax_program || check_program) ? 2 : 1];
     std::fstream file;
     file.open(filename, std::ios::in);
     if (!file.is_open()) {
@@ -24,7 +26,12 @@ int main(int argc, char **argv) {
 
     try {
         mx::Parser parser(file);
-        if (syntax_program) {
+        if (check_program) {
+            auto program = parser.parse_program();
+            mx::SemanticAnalyzer analyzer;
+            analyzer.validate(*program);
+            std::cout << "Semantic validation passed\n";
+        } else if (syntax_program) {
             std::cout << parser.parse_program()->to_string();
         } else if (syntax_only) {
             for (const auto &expression : parser.parse_expressions()) {
@@ -34,6 +41,9 @@ int main(int argc, char **argv) {
             std::cerr << "Error: Parsing failed.\n";
             return EXIT_FAILURE;
         }
+    } catch (const mx::SemanticException &e) {
+        std::cerr << "Semantic error: " << e.what() << '\n';
+        return EXIT_FAILURE;
     } catch (mx::ParserException &e) {
         std::cerr << "Exception: " << e.what() << std::endl;
         return EXIT_FAILURE;

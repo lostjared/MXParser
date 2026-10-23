@@ -1,4 +1,5 @@
 #include <MXParser/parser.hpp>
+#include <MXParser/semantic.hpp>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -23,6 +24,7 @@ int main(int argc, char **argv) {
     int failures = 0;
     size_t cases = 0;
     size_t syntax_gaps = 0;
+    size_t semantic_cases = 0;
     std::set<std::string> paths;
     std::string line;
     while (std::getline(manifest, line)) {
@@ -54,6 +56,24 @@ int main(int argc, char **argv) {
             mx::Parser parser(input);
             auto ast = parser.parse_program();
             accepted = ast != nullptr;
+            if (accepted && fields[1][0] <= '4') {
+                ++semantic_cases;
+                bool valid = true;
+                try {
+                    mx::SemanticAnalyzer analyzer;
+                    analyzer.validate(*ast);
+                } catch (const mx::SemanticException &error) {
+                    valid = false;
+                    if (error.location.line == 0 || error.location.token.empty()) {
+                        std::cerr << source_path << ": missing semantic diagnostic location\n";
+                        ++failures;
+                    }
+                }
+                if (valid != (fields[4] == "accept")) {
+                    std::cerr << source_path << ": expected semantic validation to " << fields[4] << ", got " << (valid ? "accept" : "reject") << '\n';
+                    ++failures;
+                }
+            }
         } catch (const mx::ParserException &error) {
             if (std::string(error.what()).empty()) {
                 std::cerr << source_path << ": empty parser diagnostic\n";
@@ -83,6 +103,6 @@ int main(int argc, char **argv) {
         std::cerr << "Empty or unreadable fixture manifest\n";
         ++failures;
     }
-    std::cout << cases << " subset fixtures checked against current syntax behavior; " << syntax_gaps << " documented target syntax gaps. No execution or semantic validation performed.\n";
+    std::cout << cases << " subset fixtures checked against current syntax behavior; " << syntax_gaps << " documented target syntax gaps; " << semantic_cases << " step 1-4 semantic expectations checked. No execution performed.\n";
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

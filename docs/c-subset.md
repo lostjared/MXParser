@@ -6,27 +6,27 @@ The [fixture manifest](../tests/subset/manifest.tsv) maps examples to milestones
 
 ## Capability matrix
 
-"Partial" means the restrictions below matter. Current validation is performed
-by parsing or by the numeric evaluator; there is no independent semantic pass.
-The target validation column describes the future pass, including code that
-never executes. Target execution is deliberately outside the parser milestone.
+"Partial" means the restrictions below matter. `SemanticAnalyzer` now provides
+an independent validation pass for the implemented grammar, including code that
+never executes. The target validation column still includes upcoming aggregate
+and statement features. Execution support remains the numeric interpreter subset.
 
 | Feature | Current parsing | Current validation / execution | Target parsing / validation | Step | Acceptance fixtures |
 | --- | --- | --- | --- | --- | --- |
-| Arithmetic, assignments, calls, comma, `?:`, casts | Yes | Numeric subset; runtime checks | Yes / typed operands and lvalues | 2, 4 | `expressions`, `invalid-lvalue`, `bad-operands` |
+| Arithmetic, assignments, calls, comma, `?:`, casts | Yes | Static operand/lvalue/conversion checks; numeric execution | Implemented for current types | 2, 4 | `expressions`, `invalid-lvalue`, `bad-operands` |
 | Integer, floating, character, adjacent string literals | Yes | Numeric only | Yes / typed, decoded literals | 2, 6 | `literals`, `scalars` |
-| Scalar types and qualifiers | Structured scalar/qualified types | Signed 64-bit integers, double arithmetic, float conversion | Yes / scalar conversions | 2, 4 | `scalars`, `bad-type`, `const-write`, `bad-restrict` |
-| Numeric globals, locals, multiple declarators, block scopes | Yes; independent derived types | Numeric execution; runtime scope checks | Yes / lexical resolution | 3, 4 | `numeric-program`, `mixed-declarators`, `duplicate-local` |
-| Prototypes, definitions, typed parameters, recursion, void | Yes | Direct numeric calls; runtime signature checks | Yes / compatible declarations and calls | 3, 4 | `numeric-program`, `prototype-conflict`, `bad-call`, `bad-return` |
+| Scalar types and qualifiers | Structured scalar/qualified types | LP64 validation and qualifier checks; interpreter still uses signed 64-bit storage/double arithmetic | Implemented for current types | 2, 4 | `scalars`, `bad-type`, `const-write`, `bad-restrict` |
+| Numeric globals, locals, multiple declarators, block scopes | Yes; independent derived types | Static lexical resolution and redeclaration checks; numeric execution | Implemented | 3, 4 | `numeric-program`, `mixed-declarators`, `duplicate-local` |
+| Prototypes, definitions, typed parameters, recursion, void | Yes | Static compatibility, arity, argument and return checks; direct numeric calls execute | Implemented for typed prototypes | 3, 4 | `numeric-program`, `prototype-conflict`, `bad-call`, `bad-return` |
 | Scoped typedefs and ordinary-name shadowing | Yes; expression API can also register type names | Numeric aliases execute; parser tracks declaration visibility | Yes / scoped typedef disambiguation implemented | 3 | `typedef-scope`, `bad-typedef` |
 | Pointers, arrays, parenthesized and abstract declarators | Yes within the chosen restrictions; array parameters adjust to pointers | No pointer/array execution; bounds await semantic validation | Yes / bound and complete-type checks | 3, 6 | `declarators`, `abstract-types`, `array-parameter`, `bad-declarator` |
-| `sizeof`, address/dereference, `.`, `->`, subscripting | Expression syntax only | No execution | Yes / complete object types and valid members | 4, 6 | `expressions`, `abstract-types`, `aggregates`, `unknown-member` |
-| Blocks, empty statements, `if`/`else`, `while`, `for`, jumps | Yes | Numeric execution; parser checks loop jumps | Yes / scalar conditions and jump contexts | 4, 5 | `numeric-program`, `dangling-else`, `bad-break`, `bad-continue` |
+| `sizeof`, address/dereference, `.`, `->`, subscripting | Yes | Static pointer/complete-type checks; member access diagnoses incomplete structs until definitions land | Member definitions/layout remain for step 6; no execution | 4, 6 | `expressions`, `abstract-types`, `aggregates`, `unknown-member` |
+| Blocks, empty statements, `if`/`else`, `while`, `for`, jumps | Yes | Static scalar-condition and jump-context checks; numeric execution | Implemented for existing statements | 4, 5 | `numeric-program`, `dangling-else`, `bad-break`, `bad-continue` |
 | `do`/`while`, `switch`, `case`, `default`, fallthrough | No | No | Yes / integral unique cases, enclosing contexts | 5 | `structured-statements`, `bad-case`, `duplicate-case`, `duplicate-default`, `switch-continue` |
-| Struct definitions and forward declarations | Tag references only | No layout/member validation | Yes / separate tags, complete types, member lookup | 6 | `aggregates`, `incomplete-object`, `recursive-object` |
+| Struct definitions and forward declarations | References and forward declarations | Separate scoped tags, identity and incomplete-type checks; no layout/member definitions | Definitions/member lookup remain for step 6 | 4, 6 | `aggregates`, `incomplete-object`, `recursive-object` |
 | Enum definitions and integer constant expressions | Tag references only | No enum/bound validation | Yes / constant values and positive array bounds | 6 | `aggregates`, `bad-bound`, `nonconstant-bound` |
 | Scalar, positional brace, and character-array string initializers | Scalar expressions only | Numeric only | Yes / type, shape, and bounds checking | 6 | `initializers`, `bad-initializer` |
-| File-scope `static` and `extern` | Preserved in AST and printing | No linkage semantics | Yes / one-unit declarations and storage checks | 3, 4 | `storage`, `bad-storage` |
+| File-scope `static` and `extern` | Preserved in AST and printing | Static storage/linkage conflict checks and compatible repeated declarations | Implemented within one translation unit; no linking | 3, 4 | `storage`, `bad-storage` |
 | AST source locations and useful diagnostics | AST start locations and parser exception locations | Line, column when available, offending token, expected syntax; lexer reason retained | Implemented for current grammar | 2 | `missing-semicolon`, `unexpected-eof` |
 | Combined translation unit and AST round trip | Numeric subset | Numeric execution | Yes / all included features together | 7 | `combined` |
 | Excluded features listed below | Some fragments accepted | No support contract | Explicit unsupported-feature diagnostic | 1, 7 | All `excluded-*` fixtures |
@@ -46,7 +46,8 @@ assertions about today's exact exception text.
   C combinations. `void` is only a return type, pointer target, cast target, or
   sole parameter-list marker, never an object type.
 - The planned semantic data model has 8-bit bytes; 8/16/32/64-bit integer
-  widths for char/short/int/long, with long long also 64 bits, signed plain char,
+  widths for char/short/int/long, with long long also 64 bits, two's complement
+  signed integers, signed plain char,
   a one-byte `_Bool`, binary32 float, and binary64 double/long double.
   Pointers and `sizeof` results use 64 bits. Implement integer promotions,
   usual arithmetic conversions, and assignment conversions against that model.
@@ -190,9 +191,11 @@ definition; it cannot be a bare scalar or typedef alias use.
 ## Acceptance and diagnostics
 
 Run the existing CMake/CTest commands in the README. The `subset-fixtures` test
-reads every manifest entry and checks **current syntax behavior only**, through
-`parse_program()` without evaluation or output files. A future semantic rejection
-can therefore be a current syntax acceptance. Parse errors must produce a
+reads every manifest entry and checks current syntax behavior through
+`parse_program()` without evaluation or output files. Successfully parsed inputs
+owned by steps 1–4 also check the manifest's semantic expectation through
+`SemanticAnalyzer`. A semantic rejection can therefore be a syntax acceptance.
+Parse errors must produce a
 nonempty `ParserException` with a line, token, and column when available; exact wording is not frozen. Other exceptions fail
 the test. The existing expression and function regressions remain unchanged.
 
@@ -201,8 +204,9 @@ diagnostic meaning independently. As milestones land, update current parsing
 expectations and add semantic/AST assertions to the corresponding test suite.
 Do not change a target rejection into acceptance just to match current behavior.
 Step 2 adds source-location assertions in `types-and-source`; step 3 verifies
-per-declarator types and scoped typedefs in `declarators`. Steps 4–6 must test their semantic diagnostics without
-execution; step 7 must add combined AST round trips and compiler comparisons.
+per-declarator types and scoped typedefs in `declarators`. Step 4 adds `semantics`
+and check-only CLI tests. Steps 5–6 extend static checks to their new features;
+step 7 adds combined AST round trips and compiler comparisons.
 Step 8 uses the same positive fixtures as candidates for runtime tests only
 after documenting execution support. No fixture in this suite implies it can
 currently be interpreted.
@@ -309,8 +313,8 @@ body's outer scope, while prototype-only parameter names disappear after the
 parameter list. A `for` initializer's names disappear after its body. Alias
 types retain their definition at the declaration point, even if the original
 name is later shadowed. Typedef/ordinary-name conflicts needed for disambiguation
-are diagnosed; general declaration compatibility and name/type validation
-remain work for step 4. Expression-only callers can still use `add_type_name()`.
+are diagnosed by parsing; the independent step 4 pass adds declaration
+compatibility and name/type validation. Expression-only callers can still use `add_type_name()`.
 
 Function-pointer declarations, function-pointer parameters (including implicit
 adjustment from function parameters), and variadic lists report explicit
@@ -326,3 +330,94 @@ Try the syntax example with:
 ```bash
 ./build/cmake/parse-expr --syntax-program examples/declarations.c
 ```
+
+## Semantic validation
+
+Step 4 adds an explicit, non-executing pass in
+[`MXParser/semantic.hpp`](../MXParser/semantic.hpp). Parsing remains a syntax API;
+call validation before evaluation when the stricter subset is required:
+
+```cpp
+#include <MXParser/parser.hpp>
+#include <MXParser/semantic.hpp>
+#include <sstream>
+
+std::istringstream input("int twice(int n) { return n * 2; }");
+mx::Parser parser(input);
+auto program = parser.parse_program();
+mx::SemanticAnalyzer analyzer;
+analyzer.validate(*program); // throws SemanticException with line, column, token
+```
+
+From the CLI:
+
+```bash
+./build/cmake/parse-expr --check-program examples/functions.c
+./build/cmake/parse-expr --check-program examples/declarations.c
+```
+
+This mode prints a success message or the first parser/semantic error and returns
+nonzero on failure. It never calls `main`, evaluates source expressions, emits
+intermediate code, or writes `out.html`. `parse()`, the default CLI evaluation
+mode, and the standalone evaluator keep their existing permissive behavior;
+validation is opt-in. For example, the evaluator accepts legacy empty `()`
+parameter lists and forward calls without a preceding prototype, while the
+validator requires `(void)` or typed parameters and a declaration visible at
+the call site. A visible prototype may refer to an externally defined function;
+validation performs no linking or external calls.
+
+The semantic symbol table extends the existing symbol-table infrastructure with
+typed ordinary identifiers and a separate tag namespace. Translation-unit,
+prototype, function-body, nested-block, and `for` scopes follow declaration order;
+parameters share the function body's outer scope. Duplicate locals, incompatible
+prototypes, duplicate definitions, object/function conflicts, typedef conflicts,
+and storage/linkage conflicts are diagnosed. Compatible file-scope declarations
+and tentative definitions can repeat. Block function prototypes bind only inside
+their scope while retaining compatibility with later declarations of the same
+external function. Struct tags receive scoped identities; identical spellings
+in distinct scopes do not make pointer types compatible. Typedefs retain their
+definition-time types even across later shadowing.
+
+All existing statements and expression branches are visited regardless of
+runtime reachability. Checks cover modifiable lvalues and const writes; scalar
+conditions; integer-only remainder/bitwise/shift operands; arithmetic and pointer
+operations; array decay/subscripts; address/dereference; direct calls and argument
+conversions; return types; casts; pointer qualification; `sizeof` complete object
+types; and loop jumps. Pointer conversions allow object/void pointers and null
+pointer constants, preserve pointed-to qualifiers, and reject unsafe nested
+qualification changes such as `int **` to `const int **`. Pointer arithmetic needs
+a complete target type. Function pointers, unsupported storage/type specifiers,
+and member access on currently incomplete structs fail explicitly.
+
+`ScalarDataModel` defines the LP64 sizes specified above, integer promotions,
+usual arithmetic conversions, signedness, and floating ranks. It can report sizes
+of scalars, pointers, and arrays with known literal bounds. The validator types
+integer literals using their base, suffix, rank, and representable range; checks
+floating literal range; types narrow character literals as `int`; and gives
+narrow adjacent strings a character-array type including one trailing null.
+Basic standard, octal, and hexadecimal escapes are recognized; wide/UTF and
+universal-character escape handling remain unsupported in validated input.
+
+After successful validation, `analyzer.info(expression)` returns its resolved
+type, lvalue/modifiability flags, resolved symbol where applicable, and available
+constant/null-pointer facts. Arithmetic operators and conditionals expose their
+common result type. Integer constant facts use a `uint64_t` bit representation
+at the expression's target width; `constant_expression` records arithmetic
+constant syntax and does not certify every constant-value constraint. Folding
+avoids signed overflow and division-by-zero and never executes source calls.
+This metadata does not insert conversions into the AST. Keep the AST and analyzer
+alive while reading facts; the next `validate()` resets prior results, including
+after a failure. `symbols()` exposes the remaining translation-unit scope;
+expression facts retain local-symbol references after local scopes close.
+
+The interpreter has not adopted this LP64 arithmetic model: it still uses signed
+64-bit integer storage and double arithmetic as documented above. Static type
+approval therefore does not promise C-equivalent evaluation or pointer execution.
+Bounds' positivity and full integer-constant evaluation, excluded variable-length
+arrays, enum constants, aggregate definitions/layout/member lookup, and brace
+initializers remain for step 6. Member checks currently diagnose invalid or
+incomplete bases rather than resolving fields. `sizeof` validates unevaluated
+operand types; its numeric fact is available only when the current model knows
+the size. This pass does not prove initialization, all-path returns, reachability,
+runtime bounds, alias safety, or termination. Steps 5–6 extend it alongside their
+new AST nodes and grammar.

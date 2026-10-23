@@ -200,6 +200,12 @@ cmake --build build/cmake
 ctest --test-dir build/cmake --output-on-failure
 ```
 
+Use `parse-expr --check-program filename` for name and type validation without
+execution or output files. The library API is `mx::SemanticAnalyzer` in
+`<MXParser/semantic.hpp>`; see the [semantic API and limits](docs/c-subset.md#semantic-validation).
+Validation uses the documented LP64 model; the evaluator retains its numeric
+subset and permissive legacy behavior.
+
 ## Roadmap: basic C language subset
 
 The following steps are planned work, building on the expression parser and
@@ -268,6 +274,12 @@ until the final optional step. Document support separately for each capability.
      `int (*items)[4]` and reject deferred function-pointer declarations clearly.
 
 4. **Add name resolution and semantic validation.**
+   Status: complete. Use `mx::SemanticAnalyzer::validate()` or
+   `parse-expr --check-program filename` to check a translation unit without
+   execution. See the [semantic API and limits](docs/c-subset.md#semantic-validation).
+   CTest checks the step 1–4 semantic fixtures and the scalar model, scopes,
+   qualifiers, calls, returns, and diagnostics.
+
    - Extend the symbol-table infrastructure with translation-unit, function,
      and block scopes, plus the separate tag namespace. Resolve variables,
      functions, typedef names, and compatible repeated declarations.

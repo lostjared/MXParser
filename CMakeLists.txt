@@ -18,6 +18,7 @@ add_library(mxparser STATIC
     source/evaluate.cpp
     source/functions.cpp
     source/type.cpp
+    source/semantic.cpp
 )
 
 add_library(MXParser::mxparser ALIAS mxparser)
@@ -107,6 +108,10 @@ if(BUILD_TESTING)
     target_link_libraries(declarator-tests PRIVATE mxparser MXLex::mxlex)
     target_compile_options(declarator-tests PRIVATE -Wall -Wextra -pedantic)
     add_test(NAME declarators COMMAND declarator-tests)
+    add_executable(semantic-tests tests/semantic.cpp)
+    target_link_libraries(semantic-tests PRIVATE mxparser MXLex::mxlex)
+    target_compile_options(semantic-tests PRIVATE -Wall -Wextra -pedantic)
+    add_test(NAME semantics COMMAND semantic-tests)
     add_executable(subset-tests tests/subset.cpp)
     target_link_libraries(subset-tests PRIVATE mxparser MXLex::mxlex)
     target_compile_options(subset-tests PRIVATE -Wall -Wextra -pedantic)
@@ -115,4 +120,6 @@ if(BUILD_TESTING)
     set_tests_properties(function-example PROPERTIES PASS_REGULAR_EXPRESSION "Result: 21")
     add_test(NAME function-syntax COMMAND parse-expr --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/functions.c)
     add_test(NAME declaration-syntax COMMAND parse-expr --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/declarations.c)
+    add_test(NAME function-check COMMAND parse-expr --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/functions.c)
+    add_test(NAME declaration-check COMMAND parse-expr --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/declarations.c)
 endif()

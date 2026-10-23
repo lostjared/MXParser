@@ -1,13 +1,46 @@
 #pragma once
+#include "MXParser/source.hpp"
+#include "MXParser/type.hpp"
 #include <MXLex/scanner.hpp>
+#include <memory>
 #include <optional>
 #include <print>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 namespace mx {
+
+    enum class SemanticSymbolKind { Object, Function, Typedef, Tag };
+    struct SemanticSymbol {
+        SemanticSymbolKind kind;
+        TypePtr type;
+        SourceLocation location;
+        bool defined = false;
+        bool internal_linkage = false;
+    };
+
+    /** Typed lexical scopes with independent ordinary-identifier and tag namespaces. */
+    class SemanticSymbolTable {
+      public:
+        using Entry = std::shared_ptr<SemanticSymbol>;
+        void push_scope();
+        void pop_scope();
+        size_t depth() const;
+        Entry lookup(const std::string &name, bool tag = false) const;
+        Entry lookup_current(const std::string &name, bool tag = false) const;
+        Entry at_scope(size_t scope, const std::string &name, bool tag = false) const;
+        bool enter(size_t scope, const std::string &name, Entry symbol, bool tag = false);
+
+      private:
+        struct Scope {
+            std::unordered_map<std::string, Entry> ordinary;
+            std::unordered_map<std::string, Entry> tags;
+        };
+        std::vector<Scope> scopes{1};
+    };
 
     enum class SYMBOL_TYPE { SYMBOL_NOT_FOUND, SYMBOL_IDENTIFER, SYMBOL_FLOAT_VARIABLE, SYMBOL_INTEGER_VARIABLE, SYMBOL_FUNCTION, SYMBOL_KEYWORD };
     class SymbolException : public std::exception {};

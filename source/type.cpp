@@ -83,7 +83,7 @@ namespace mx {
         }
     } // namespace
 
-    Type::Type(TypeKind kind, ScalarKind scalar, TypePtr element, TypeQualifiers qualifiers, TagKind tag, std::string name, std::optional<size_t> bound, std::vector<TypePtr> parameters, std::string spelling, std::shared_ptr<const ExprNode> expression, bool has_prototype) : kind(kind), scalar(scalar), tag(tag), qualifiers(qualifiers), name(std::move(name)), element(std::move(element)), bound(bound), bound_expression(std::move(expression)), parameters(std::move(parameters)), has_prototype(has_prototype), spelling(std::move(spelling)) {}
+    Type::Type(TypeKind kind, ScalarKind scalar, TypePtr element, TypeQualifiers qualifiers, TagKind tag, std::string name, std::optional<size_t> bound, std::vector<TypePtr> parameters, std::string spelling, std::shared_ptr<const ExprNode> expression, bool has_prototype, size_t tag_identity) : kind(kind), scalar(scalar), tag(tag), qualifiers(qualifiers), name(std::move(name)), element(std::move(element)), bound(bound), bound_expression(std::move(expression)), parameters(std::move(parameters)), has_prototype(has_prototype), tag_identity(tag_identity), spelling(std::move(spelling)) {}
 
     TypePtr Type::scalar_type(ScalarKind scalar) { return TypePtr(new Type(TypeKind::Scalar, scalar)); }
     TypePtr Type::qualified(TypePtr base, TypeQualifiers qualifiers) {
@@ -113,10 +113,10 @@ namespace mx {
             require_type(parameter);
         return TypePtr(new Type(TypeKind::Function, ScalarKind::Int, std::move(result), {}, TagKind::Struct, {}, {}, std::move(parameters), {}, {}, has_prototype));
     }
-    TypePtr Type::tagged(TagKind tag, std::string name) {
+    TypePtr Type::tagged(TagKind tag, std::string name, size_t identity) {
         if (!identifier(name))
             throw std::invalid_argument("Expected type tag");
-        return TypePtr(new Type(TypeKind::Tagged, ScalarKind::Int, {}, {}, tag, std::move(name)));
+        return TypePtr(new Type(TypeKind::Tagged, ScalarKind::Int, {}, {}, tag, std::move(name), {}, {}, {}, {}, true, identity));
     }
     TypePtr Type::named(std::string name, TypePtr definition) {
         if (!identifier(name))
@@ -148,7 +148,7 @@ namespace mx {
         case TypeKind::Array:
             return bound == other.bound && (bound || ((!bound_expression && !other.bound_expression) || (bound_expression && other.bound_expression && bound_expression->to_string() == other.bound_expression->to_string()))) && element->equals(*other.element);
         case TypeKind::Tagged:
-            return tag == other.tag && name == other.name;
+            return tag == other.tag && (tag_identity || other.tag_identity ? tag_identity == other.tag_identity : name == other.name);
         case TypeKind::Named:
             return name == other.name && ((!element && !other.element) || (element && other.element && element->equals(*other.element)));
         case TypeKind::Function:
