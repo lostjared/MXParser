@@ -25,6 +25,10 @@ namespace mx {
     void ASTVisitor::visit(DeclarationNode &) { throw std::runtime_error("Visitor does not support declarations"); }
     void ASTVisitor::visit(IfNode &) { throw std::runtime_error("Visitor does not support if statements"); }
     void ASTVisitor::visit(WhileNode &) { throw std::runtime_error("Visitor does not support while statements"); }
+    void ASTVisitor::visit(DoWhileNode &) { throw std::runtime_error("Visitor does not support do/while statements"); }
+    void ASTVisitor::visit(SwitchNode &) { throw std::runtime_error("Visitor does not support switch statements"); }
+    void ASTVisitor::visit(CaseNode &) { throw std::runtime_error("Visitor does not support case labels"); }
+    void ASTVisitor::visit(DefaultNode &) { throw std::runtime_error("Visitor does not support default labels"); }
     void ASTVisitor::visit(ForNode &) { throw std::runtime_error("Visitor does not support for statements"); }
     void ASTVisitor::visit(JumpNode &) { throw std::runtime_error("Visitor does not support break/continue"); }
 
@@ -70,6 +74,10 @@ namespace mx {
     }
     std::string IfNode::to_string() const { return "if(" + condition->to_string() + ")" + statement_text(*then_statement) + (else_statement ? " else " + statement_text(*else_statement) : ""); }
     std::string WhileNode::to_string() const { return "while(" + condition->to_string() + ")" + statement_text(*body); }
+    std::string DoWhileNode::to_string() const { return "do " + statement_text(*body) + " while(" + condition->to_string() + ");"; }
+    std::string SwitchNode::to_string() const { return "switch(" + condition->to_string() + ")" + statement_text(*body); }
+    std::string CaseNode::to_string() const { return "case " + value->to_string() + ":" + statement_text(*statement); }
+    std::string DefaultNode::to_string() const { return "default:" + statement_text(*statement); }
     std::string ForNode::to_string() const {
         std::string init = initializer ? statement_text(*initializer) : ";";
         return "for(" + init + (condition ? condition->to_string() : "") + ";" + (update ? update->to_string() : "") + ")" + statement_text(*body);

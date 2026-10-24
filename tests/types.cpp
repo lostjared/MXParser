@@ -115,6 +115,19 @@ namespace {
             walk(*node.condition);
             walk(*node.body);
         }
+        void visit(mx::DoWhileNode &node) override {
+            walk(*node.body);
+            walk(*node.condition);
+        }
+        void visit(mx::SwitchNode &node) override {
+            walk(*node.condition);
+            walk(*node.body);
+        }
+        void visit(mx::CaseNode &node) override {
+            walk(*node.value);
+            walk(*node.statement);
+        }
+        void visit(mx::DefaultNode &node) override { walk(*node.statement); }
         void visit(mx::ForNode &node) override {
             if (node.initializer)
                 walk(*node.initializer);

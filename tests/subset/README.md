@@ -35,9 +35,14 @@ ctest --test-dir build/cmake --output-on-failure
 Run only fixture checks with `ctest --test-dir build/cmake -R subset-fixtures
 --output-on-failure`. This checks current syntax expectations and parser
 diagnostics with source locations and token columns when available. For inputs
-owned by steps 1–4 that parse successfully, it also checks `target_validation`
+owned by steps 1–5 that parse successfully, it also checks `target_validation`
 using the independent semantic analyzer. No source code executes. Later acceptance expectations are
 data for upcoming milestones, not expected-failure tests. When implementing a
 feature, update its baseline and add AST or semantic assertions to verify the
 target behavior. Preserve negative cases and the existing expression/function
 regressions.
+
+Step 5 updates `target_parse` for invalid loop/switch jump and label contexts to
+match the parser's early context diagnostics. Their `target_validation` remains
+`reject`; the statement suite also checks semantic contexts using constructed
+ASTs. Duplicate cases/defaults remain syntax acceptances with semantic rejections.

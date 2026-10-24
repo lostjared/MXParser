@@ -96,6 +96,16 @@ namespace mx {
             Parser &parser;
             bool active;
         };
+        class DepthGuard {
+          public:
+            DepthGuard(size_t &depth) : depth(depth) { ++depth; }
+            ~DepthGuard() { --depth; }
+            DepthGuard(const DepthGuard &) = delete;
+            DepthGuard &operator=(const DepthGuard &) = delete;
+
+          private:
+            size_t &depth;
+        };
         struct DeclarationSpecifiers {
             TypePtr type;
             SourceLocation location;
@@ -126,6 +136,7 @@ namespace mx {
         std::unique_ptr<ASTNode> declaration(bool file_scope);
         Token identifier();
         size_t loop_depth = 0;
+        size_t switch_depth = 0;
         std::set<std::string> type_names;
     };
 } // namespace mx

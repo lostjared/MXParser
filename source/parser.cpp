@@ -88,6 +88,7 @@ namespace mx {
         scan_failure.reset();
         name_scopes.assign(1, {});
         loop_depth = 0;
+        switch_depth = 0;
         try {
             Token token;
             TOKEN_TYPE token_type;
@@ -872,14 +873,53 @@ namespace mx {
             expect("(");
             result->condition = expr();
             expect(")");
-            ++loop_depth;
-            try {
+            DepthGuard loop(loop_depth);
+            result->body = function_statement();
+            return result;
+        }
+        if (match("do")) {
+            ScopeGuard scope(*this);
+            auto result = std::make_unique<DoWhileNode>();
+            result->location = location;
+            {
+                DepthGuard loop(loop_depth);
                 result->body = function_statement();
-            } catch (...) {
-                --loop_depth;
-                throw;
             }
-            --loop_depth;
+            expect("while");
+            expect("(");
+            result->condition = expr();
+            expect(")");
+            expect(";");
+            return result;
+        }
+        if (match("switch")) {
+            ScopeGuard scope(*this);
+            auto result = std::make_unique<SwitchNode>();
+            result->location = location;
+            expect("(");
+            result->condition = expr();
+            expect(")");
+            DepthGuard selection(switch_depth);
+            result->body = function_statement();
+            return result;
+        }
+        if (match("case")) {
+            if (!switch_depth)
+                throw ParserException("case requires an enclosing switch", location);
+            auto result = std::make_unique<CaseNode>();
+            result->location = location;
+            result->value = conditional();
+            expect(":");
+            result->statement = function_statement();
+            return result;
+        }
+        if (match("default")) {
+            if (!switch_depth)
+                throw ParserException("default requires an enclosing switch", location);
+            auto result = std::make_unique<DefaultNode>();
+            result->location = location;
+            expect(":");
+            result->statement = function_statement();
             return result;
         }
         if (match("for")) {
@@ -902,19 +942,13 @@ namespace mx {
             if (top().get_token() != ")")
                 result->update = expr();
             expect(")");
-            ++loop_depth;
-            try {
-                result->body = function_statement();
-            } catch (...) {
-                --loop_depth;
-                throw;
-            }
-            --loop_depth;
+            DepthGuard loop(loop_depth);
+            result->body = function_statement();
             return result;
         }
         if (top().get_token() == "break" || top().get_token() == "continue") {
-            if (!loop_depth)
-                fail("Expected an enclosing loop for break/continue");
+            if (!loop_depth && (top().get_token() == "continue" || !switch_depth))
+                fail(top().get_token() == "break" ? "Expected an enclosing loop or switch for break" : "Expected an enclosing loop for continue");
             auto result = std::make_unique<JumpNode>();
             result->location = location;
             result->is_break = top().get_token() == "break";

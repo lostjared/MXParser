@@ -22,7 +22,7 @@ and statement features. Execution support remains the numeric interpreter subset
 | Pointers, arrays, parenthesized and abstract declarators | Yes within the chosen restrictions; array parameters adjust to pointers | No pointer/array execution; bounds await semantic validation | Yes / bound and complete-type checks | 3, 6 | `declarators`, `abstract-types`, `array-parameter`, `bad-declarator` |
 | `sizeof`, address/dereference, `.`, `->`, subscripting | Yes | Static pointer/complete-type checks; member access diagnoses incomplete structs until definitions land | Member definitions/layout remain for step 6; no execution | 4, 6 | `expressions`, `abstract-types`, `aggregates`, `unknown-member` |
 | Blocks, empty statements, `if`/`else`, `while`, `for`, jumps | Yes | Static scalar-condition and jump-context checks; numeric execution | Implemented for existing statements | 4, 5 | `numeric-program`, `dangling-else`, `bad-break`, `bad-continue` |
-| `do`/`while`, `switch`, `case`, `default`, fallthrough | No | No | Yes / integral unique cases, enclosing contexts | 5 | `structured-statements`, `bad-case`, `duplicate-case`, `duplicate-default`, `switch-continue` |
+| `do`/`while`, `switch`, `case`, `default`, fallthrough | Yes; label order and nesting preserved | Static condition, constant-case, duplicate/default and context checks; execution/ICode deferred | Implemented for existing integer types | 5 | `structured-statements`, `bad-case`, `duplicate-case`, `duplicate-default`, `switch-continue` |
 | Struct definitions and forward declarations | References and forward declarations | Separate scoped tags, identity and incomplete-type checks; no layout/member definitions | Definitions/member lookup remain for step 6 | 4, 6 | `aggregates`, `incomplete-object`, `recursive-object` |
 | Enum definitions and integer constant expressions | Tag references only | No enum/bound validation | Yes / constant values and positive array bounds | 6 | `aggregates`, `bad-bound`, `nonconstant-bound` |
 | Scalar, positional brace, and character-array string initializers | Scalar expressions only | Numeric only | Yes / type, shape, and bounds checking | 6 | `initializers`, `bad-initializer` |
@@ -193,7 +193,7 @@ definition; it cannot be a bare scalar or typedef alias use.
 Run the existing CMake/CTest commands in the README. The `subset-fixtures` test
 reads every manifest entry and checks current syntax behavior through
 `parse_program()` without evaluation or output files. Successfully parsed inputs
-owned by steps 1–4 also check the manifest's semantic expectation through
+owned by steps 1–5 also check the manifest's semantic expectation through
 `SemanticAnalyzer`. A semantic rejection can therefore be a syntax acceptance.
 Parse errors must produce a
 nonempty `ParserException` with a line, token, and column when available; exact wording is not frozen. Other exceptions fail
@@ -205,7 +205,8 @@ expectations and add semantic/AST assertions to the corresponding test suite.
 Do not change a target rejection into acceptance just to match current behavior.
 Step 2 adds source-location assertions in `types-and-source`; step 3 verifies
 per-declarator types and scoped typedefs in `declarators`. Step 4 adds `semantics`
-and check-only CLI tests. Steps 5–6 extend static checks to their new features;
+and check-only CLI tests. Step 5 adds `statements` and syntax/check-only statement
+examples; step 6 extends checks to aggregates and complete constant-expression validation;
 step 7 adds combined AST round trips and compiler comparisons.
 Step 8 uses the same positive fixtures as candidates for runtime tests only
 after documenting execution support. No fixture in this suite implies it can
@@ -420,4 +421,54 @@ incomplete bases rather than resolving fields. `sizeof` validates unevaluated
 operand types; its numeric fact is available only when the current model knows
 the size. This pass does not prove initialization, all-path returns, reachability,
 runtime bounds, alias safety, or termination. Steps 5–6 extend it alongside their
-new AST nodes and grammar.
+new AST nodes and grammar. Step 5's structured statements are described below.
+
+## Structured statements
+
+Step 5 adds `DoWhileNode`, `SwitchNode`, `CaseNode`, and `DefaultNode`. Each
+contains its parsed condition/value where applicable and its body or associated
+statement. Labels are statements attached to the following statement; they are
+not flattened into independent case blocks. This preserves stacked labels,
+fallthrough, nested labels inside other statements, and the nearest-switch
+association. Source locations retain the `do`, `switch`, `case`, or `default`
+token's line and column. AST printing produces valid statement syntax and keeps
+the original label order. Empty statements retain the existing empty-block AST
+representation. Under this C99 subset, a label must precede a statement; use
+braces or an empty statement before a declaration, and do not leave a label
+immediately before a closing brace.
+
+The parser tracks loop and switch nesting independently. `break` requires either
+context; `continue` requires a loop even when written inside a switch. Labels
+require an enclosing switch. These context errors are diagnosed during parsing
+and checked again by the semantic analyzer for ASTs built directly by callers.
+The manifest now records those early context rejections in `target_parse` while
+retaining their rejected validation outcome. Other constraints, including case
+values and duplicates, remain independent semantic checks.
+
+Semantic validation requires a scalar `do`/`while` condition and an integer
+switch condition. The switch type undergoes integer promotion first. Every case
+must have a known integer constant value, and duplicate detection converts that
+value to the promoted control type. Thus `unsigned char` controls promote to
+`int`, whereas `unsigned int` controls retain unsigned arithmetic; `-1` and
+`4294967295U` collide in the latter case. Multiple defaults fail per switch,
+while nested switches keep their own case/default sets. Both branches of `if`
+statements and all labels are checked even when unreachable at runtime.
+
+Case folding supports the current integer literal/arithmetic, character, cast,
+conditional, and known-size `sizeof` facts. Supported constant array-bound
+arithmetic is also folded into resolved type extents so that, for example,
+`case sizeof(int[1+2]):` can be checked. Parser AST bounds remain unchanged.
+Calls, ordinary variable values, assignments, comma expressions, and invalid
+constant arithmetic do not supply case constants. Enum constants and the full
+bound/constant-expression work remain for step 6.
+
+New visitor overloads have throwing defaults, preserving source compatibility
+for existing visitors. The evaluator, intermediate-code generator, and HTML
+visitor currently report these statements as unsupported. This is deliberate:
+their execution is planned for step 8. The statement suite verifies those errors
+and evaluator recovery, rather than claiming runtime fallthrough support.
+
+```bash
+./build/cmake/parse-expr --syntax-program examples/statements.c
+./build/cmake/parse-expr --check-program examples/statements.c
+```

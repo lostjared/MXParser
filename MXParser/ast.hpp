@@ -38,6 +38,10 @@ namespace mx {
     class DeclarationNode;
     class IfNode;
     class WhileNode;
+    class DoWhileNode;
+    class SwitchNode;
+    class CaseNode;
+    class DefaultNode;
     class ForNode;
     class JumpNode;
 
@@ -63,6 +67,10 @@ namespace mx {
         virtual void visit(DeclarationNode &node);
         virtual void visit(IfNode &node);
         virtual void visit(WhileNode &node);
+        virtual void visit(DoWhileNode &node);
+        virtual void visit(SwitchNode &node);
+        virtual void visit(CaseNode &node);
+        virtual void visit(DefaultNode &node);
         virtual void visit(ForNode &node);
         virtual void visit(JumpNode &node);
     };
@@ -284,6 +292,37 @@ namespace mx {
       public:
         std::unique_ptr<ASTNode> initializer, body;
         std::unique_ptr<ExprNode> condition, update;
+        void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
+        std::string to_string() const override;
+    };
+
+    class DoWhileNode : public ASTNode {
+      public:
+        std::unique_ptr<ASTNode> body;
+        std::unique_ptr<ExprNode> condition;
+        void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
+        std::string to_string() const override;
+    };
+
+    class SwitchNode : public ASTNode {
+      public:
+        std::unique_ptr<ExprNode> condition;
+        std::unique_ptr<ASTNode> body;
+        void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
+        std::string to_string() const override;
+    };
+
+    class CaseNode : public ASTNode {
+      public:
+        std::unique_ptr<ExprNode> value;
+        std::unique_ptr<ASTNode> statement;
+        void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
+        std::string to_string() const override;
+    };
+
+    class DefaultNode : public ASTNode {
+      public:
+        std::unique_ptr<ASTNode> statement;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override;
     };

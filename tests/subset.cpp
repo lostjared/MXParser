@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
             mx::Parser parser(input);
             auto ast = parser.parse_program();
             accepted = ast != nullptr;
-            if (accepted && fields[1][0] <= '4') {
+            if (accepted && fields[1][0] <= '5') {
                 ++semantic_cases;
                 bool valid = true;
                 try {
@@ -103,6 +103,6 @@ int main(int argc, char **argv) {
         std::cerr << "Empty or unreadable fixture manifest\n";
         ++failures;
     }
-    std::cout << cases << " subset fixtures checked against current syntax behavior; " << syntax_gaps << " documented target syntax gaps; " << semantic_cases << " step 1-4 semantic expectations checked. No execution performed.\n";
+    std::cout << cases << " subset fixtures checked against current syntax behavior; " << syntax_gaps << " documented target syntax gaps; " << semantic_cases << " step 1-5 semantic expectations checked. No execution performed.\n";
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

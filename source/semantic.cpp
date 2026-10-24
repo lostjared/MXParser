@@ -212,6 +212,12 @@ namespace mx {
         std::unordered_map<const ExprNode *, ExpressionInfo> facts;
         std::unordered_map<std::string, SemanticSymbolTable::Entry> external_functions;
         size_t loop_depth = 0;
+        struct SwitchContext {
+            TypePtr promoted_type;
+            std::set<uint64_t> values;
+            bool default_seen = false;
+        };
+        std::vector<SwitchContext> switches;
         TypePtr return_type;
         struct Scope {
             SemanticSymbolTable &table;
@@ -275,9 +281,14 @@ namespace mx {
                 auto element = resolve(raw->element, where);
                 require(!void_type(element) && bare(element)->kind != K::Function, where, "Array element must have object type");
                 require(complete(element), where, "Array element requires a complete object type");
-                if (raw->bound_expression)
-                    require(integer(infer(*raw->bound_expression).type), raw->bound_expression->location, "Array bound requires integer type");
-                return Type::array(element, raw->bound, raw->bound_expression);
+                auto extent = raw->bound;
+                if (raw->bound_expression) {
+                    auto bound = infer(*raw->bound_expression);
+                    require(integer(bound.type), raw->bound_expression->location, "Array bound requires integer type");
+                    if (!extent && bound.constant_expression && bound.integer_constant && (unsigned_type(bare(bound.type)->scalar) || signed_value(*bound.integer_constant, bound.type) >= 0) && *bound.integer_constant <= SIZE_MAX)
+                        extent = static_cast<size_t>(*bound.integer_constant);
+                }
+                return Type::array(element, extent, raw->bound_expression);
             }
             case K::Function: {
                 require(raw->has_prototype, where, "Use (void) or typed parameters; unprototyped functions are unsupported");
@@ -830,6 +841,45 @@ namespace mx {
                 --loop_depth;
                 return;
             }
+            if (auto loop = dynamic_cast<const DoWhileNode *>(&node)) {
+                Scope scope(table);
+                ++loop_depth;
+                {
+                    Scope body_scope(table);
+                    analyze(*loop->body);
+                }
+                --loop_depth;
+                require(scalar(decay(infer(*loop->condition).type)), loop->condition->location, "do/while condition requires scalar type");
+                return;
+            }
+            if (auto selection = dynamic_cast<const SwitchNode *>(&node)) {
+                Scope scope(table);
+                auto control = decay(infer(*selection->condition).type);
+                require(integer(control), selection->condition->location, "switch condition requires integer type");
+                switches.push_back({ScalarDataModel::integer_promotion(control), {}, false});
+                {
+                    Scope body_scope(table);
+                    analyze(*selection->body);
+                }
+                switches.pop_back();
+                return;
+            }
+            if (auto label = dynamic_cast<const CaseNode *>(&node)) {
+                require(!switches.empty(), node.location, "case requires an enclosing switch");
+                auto value = infer(*label->value);
+                require(integer(value.type) && value.constant_expression && value.integer_constant.has_value(), label->value->location, "Case label requires an integer constant expression");
+                auto key = converted(*value.integer_constant, value.type, switches.back().promoted_type);
+                require(switches.back().values.insert(key).second, node.location, "Duplicate case value after conversion to the promoted switch type");
+                analyze(*label->statement);
+                return;
+            }
+            if (auto label = dynamic_cast<const DefaultNode *>(&node)) {
+                require(!switches.empty(), node.location, "default requires an enclosing switch");
+                require(!switches.back().default_seen, node.location, "Multiple default labels in one switch");
+                switches.back().default_seen = true;
+                analyze(*label->statement);
+                return;
+            }
             if (auto loop = dynamic_cast<const ForNode *>(&node)) {
                 Scope scope(table);
                 if (loop->initializer)
@@ -843,8 +893,8 @@ namespace mx {
                 --loop_depth;
                 return;
             }
-            if (dynamic_cast<const JumpNode *>(&node)) {
-                require(loop_depth != 0, node.location, "break/continue requires an enclosing loop");
+            if (auto jump = dynamic_cast<const JumpNode *>(&node)) {
+                require(loop_depth != 0 || (jump->is_break && !switches.empty()), node.location, jump->is_break ? "break requires an enclosing loop or switch" : "continue requires an enclosing loop");
                 return;
             }
             if (auto assignment = dynamic_cast<const AssignmentNode *>(&node)) {

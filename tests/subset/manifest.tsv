@@ -10,7 +10,7 @@ fixtures/abstract-types.c	3	accept	accept	accept	-
 fixtures/array-parameter.c	3	accept	accept	accept	-
 fixtures/typedef-scope.c	3	accept	accept	accept	-
 fixtures/storage.c	3	accept	accept	accept	-
-fixtures/structured-statements.c	5	reject	accept	accept	-
+fixtures/structured-statements.c	5	accept	accept	accept	-
 fixtures/aggregates.c	6	reject	accept	accept	-
 fixtures/initializers.c	6	reject	accept	accept	-
 fixtures/combined.c	7	reject	accept	accept	-
@@ -29,12 +29,12 @@ fixtures/prototype-conflict.c	4	accept	accept	reject	incompatible function retur
 fixtures/bad-call.c	4	accept	accept	reject	function call argument count does not match prototype
 fixtures/bad-return.c	4	accept	accept	reject	void function must not return a value
 fixtures/bad-storage.c	4	accept	accept	reject	conflicting storage classes static and extern
-fixtures/bad-break.c	5	reject	accept	reject	break requires an enclosing loop or switch
-fixtures/bad-continue.c	5	reject	accept	reject	continue requires an enclosing loop
-fixtures/bad-case.c	5	reject	accept	reject	case requires an enclosing switch
-fixtures/duplicate-case.c	5	reject	accept	reject	duplicate case value after conversion
-fixtures/duplicate-default.c	5	reject	accept	reject	multiple defaults in one switch
-fixtures/switch-continue.c	5	reject	accept	reject	continue in a switch still requires an enclosing loop
+fixtures/bad-break.c	5	reject	reject	reject	break requires an enclosing loop or switch
+fixtures/bad-continue.c	5	reject	reject	reject	continue requires an enclosing loop
+fixtures/bad-case.c	5	reject	reject	reject	case requires an enclosing switch
+fixtures/duplicate-case.c	5	accept	accept	reject	duplicate case value after conversion
+fixtures/duplicate-default.c	5	accept	accept	reject	multiple defaults in one switch
+fixtures/switch-continue.c	5	reject	reject	reject	continue in a switch still requires an enclosing loop
 fixtures/unknown-member.c	6	reject	accept	reject	struct has no member named missing
 fixtures/incomplete-object.c	6	accept	accept	reject	object has incomplete struct type
 fixtures/recursive-object.c	6	reject	accept	reject	struct cannot contain itself by value

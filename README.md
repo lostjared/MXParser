@@ -148,6 +148,12 @@ numeric declarations (including multiple declarators), nested blocks, `return`,
 Functions support typed parameters and return values, recursion, forward calls,
 and separate local scopes. Use `(void)` or `()` for a function without parameters.
 
+Syntax parsing and semantic validation also support `do`/`while` and
+`switch`/`case`/`default`, including stacked labels and fallthrough. Try
+`parse-expr --check-program examples/statements.c`. Execution and intermediate
+code generation for these new statements remain for roadmap step 8; their
+visitors currently report explicit unsupported-operation errors.
+
 For example, [examples/functions.c](examples/functions.c) combines a
 floating-point average function with a recursive factorial function:
 
@@ -291,6 +297,11 @@ until the final optional step. Document support separately for each capability.
      Keep any permissive legacy expression-evaluation behavior explicit.
 
 5. **Complete structured statements.**
+   Status: complete for parsing and validation. See the
+   [structured-statement notes](docs/c-subset.md#structured-statements) and
+   [examples/statements.c](examples/statements.c). CTest covers case conversion,
+   label/jump contexts, nesting, round trips, and visitor compatibility.
+
    - Add `do`/`while`, `switch`, `case`, and `default` AST nodes and parsing.
      Retain existing blocks, empty statements, `if`/`else`, `while`, `for`,
      `return`, `break`, and `continue`.
