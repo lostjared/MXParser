@@ -150,9 +150,8 @@ and separate local scopes. Use `(void)` or `()` for a function without parameter
 
 Syntax parsing and semantic validation also support `do`/`while` and
 `switch`/`case`/`default`, including stacked labels and fallthrough. Try
-`parse-expr --check-program examples/statements.c`. Execution and intermediate
-code generation for these new statements remain for roadmap step 8; their
-visitors currently report explicit unsupported-operation errors.
+`parse-expr --check-program examples/statements.c`. The validated `Interpreter` executes these statements, and ICode/HTML emit their
+control flow. The legacy `Evaluate` visitor retains its original numeric subset.
 
 For example, [examples/functions.c](examples/functions.c) combines a
 floating-point average function with a recursive factorial function:
@@ -209,13 +208,13 @@ ctest --test-dir build/cmake --output-on-failure
 Use `parse-expr --check-program filename` for name and type validation without
 execution or output files. The library API is `mx::SemanticAnalyzer` in
 `<MXParser/semantic.hpp>`; see the [semantic API and limits](docs/c-subset.md#semantic-validation).
-Validation uses the documented LP64 model; the evaluator retains its numeric
-subset and permissive legacy behavior.
+Validation and `Interpreter` use the documented LP64 model; the legacy `Evaluate`
+API retains its numeric subset and permissive behavior.
 
 ## Validated C subset
 
-Roadmap steps 1–7 are complete for the documented single-translation-unit
-subset. [examples/subset.c](examples/subset.c) combines structs, enums, arrays,
+All eight roadmap steps are implemented for the documented single-translation-unit
+subset, with execution limits listed below. [examples/subset.c](examples/subset.c) combines structs, enums, arrays,
 initializers, pointer parameters, struct returns, and nested control flow:
 
 ```bash
@@ -224,19 +223,28 @@ initializers, pointer parameters, struct returns, and nested control flow:
 ```
 
 The first command checks names/types; the second prints C syntax. Neither runs
-source code nor writes `out.html`. See the [exact boundary and API notes](docs/c-subset.md)
-for the fixed LP64 data model and exclusions.
+source code nor writes `out.html`. To execute the same example with the validated
+interpreter:
 
-| Feature | Parsing | Semantic validation | Execution |
+```bash
+./build/cmake/parse-expr --run-program examples/subset.c
+# Result: 2
+```
+
+This mode validates before execution and writes no HTML or intermediate code.
+See the [exact boundary and API notes](docs/c-subset.md) for the fixed LP64 data
+model and exclusions.
+
+| Feature | Parsing | Semantic validation | Interpreter execution |
 | --- | --- | --- | --- |
-| Scalar declarations, typedefs, prototypes, functions | Yes | Names, scopes, qualifiers, conversions, and calls | Numeric subset |
-| Arithmetic, assignments, casts, calls, `?:`, comma | Yes | Operand and lvalue checks | Numeric subset |
-| Narrow characters and adjacent strings | Yes | Escape decoding and typed literals | Unsupported |
-| Pointers, fixed arrays, subscripts, `sizeof` | Yes | Complete types, constant bounds, pointer conversions | Unsupported |
-| Structs, enum definitions, `.`, `->` | Yes | Scoped tags, layout, members, enum constants | Unsupported |
-| Scalar, positional brace, string-array initializers | Yes | Type, shape, extents, and constant requirements | Numeric expression initializers only |
-| Blocks, `if`, `while`, `for`, return and loop jumps | Yes | Conditions and jump contexts | Numeric subset |
-| `do`/`while`, `switch`, `case`, `default` | Yes | Conditions, constants, duplicate labels, contexts | Unsupported |
+| Scalar declarations, typedefs, prototypes, functions | Yes | Names, scopes, qualifiers, conversions, and calls | Yes, LP64 arithmetic |
+| Arithmetic, assignments, casts, calls, `?:`, comma | Yes | Operand and lvalue checks | Yes, LP64 arithmetic |
+| Narrow characters and adjacent strings | Yes | Escape decoding and typed literals | Yes |
+| Pointers, fixed arrays, subscripts, `sizeof` | Yes | Complete types, constant bounds, pointer conversions | Yes, with object bounds/lifetime checks |
+| Structs, enum definitions, `.`, `->` | Yes | Scoped tags, layout, members, enum constants | Yes, including struct assignment/returns |
+| Scalar, positional brace, string-array initializers | Yes | Type, shape, extents, and constant requirements | Yes, including omitted-element zero filling |
+| Blocks, `if`, `while`, `for`, return and loop jumps | Yes | Conditions and jump contexts | Yes |
+| `do`/`while`, `switch`, `case`, `default` | Yes | Conditions, constants, duplicate labels, contexts | Yes, including fallthrough and loop jumps |
 | Preprocessing, unions, bit-fields, VLA, function pointers, variadics, designated initializers, `goto` | Outside subset | Rejected with diagnostics | Unsupported |
 
 CTest checks the final fixture contract, AST structure and printing, source
@@ -247,10 +255,62 @@ and the combined example, both original and printed, with
 configuration time to select a compiler; configuration reports when this optional
 comparison cannot be registered. The comparison does not link or execute C.
 
+## Validated execution
+
+`mx::Interpreter` in `<MXParser/interpreter.hpp>` validates and loads a program,
+then calls its functions. Keep the AST alive while using it:
+
+```cpp
+std::istringstream input("unsigned int bump(unsigned int n) { return n + 1u; }");
+mx::Parser parser(input);
+auto program = parser.parse_program();
+mx::Interpreter interpreter;
+interpreter.load(*program);
+auto result = interpreter.call("bump", {std::uint64_t{4294967295}});
+std::cout << std::get<std::uint64_t>(result) << '\n'; // 0
+```
+
+`ExecutionValue` holds void (`monostate`), `int64_t`, `uint64_t`, or `double`.
+Calls between C functions also pass and return pointers and structs; the public
+C++ call boundary exchanges scalars. Use a C wrapper to expose a scalar result
+from an object-valued function. Globals persist between calls. A successful
+`load()` replaces the program; a failed load preserves the previous one.
+
+The interpreter implements the fixed LP64 model, integer promotions, unsigned
+wrapping, signed overflow checks, scalar conversions, and binary32 rounding for
+`float`. `double` and `long double` both use binary64. It supports scoped objects,
+arrays, strings, pointer references/arithmetic, positional initialization, struct
+copies/parameters/returns, member access, unevaluated `sizeof`, and every parsed
+control-flow statement. Compound assignments evaluate their target once.
+
+Runtime checks report uninitialized reads, null/expired/one-past access, const
+writes, invalid shifts, arithmetic overflow, and unresolved external objects or
+functions. Pointer arithmetic stays within its originating array (including the
+one-past address). This is typed object storage, not a byte-addressable host
+process: incompatible representation casts and character-byte aliasing into
+other object types, and casts that recover enclosing objects from member bounds,
+are unsupported. External libraries, allocation functions,
+and linker support remain outside the subset. No complete undefined-behavior or
+unsequenced-access detection is promised.
+
+`ExecutionLimits` defaults to one million instructions per call/load, 256 call
+frames, and one MiB per object. Interpreter failures throw `ExecutionException`
+with source locations; validation failures throw `SemanticException`. Failed calls
+clean up frames/scopes while retaining completed global writes.
+
+`execution` tests runtime behavior and errors. When a system C compiler is
+available, `execution-c99-comparison` builds and runs matching scalar-result
+programs against the interpreter on an LP64 host. Fixed-model `sizeof(long double)`
+and full-width public unsigned results have separate unit checks because host
+storage/result conventions differ. Generated binaries and C files stay in the
+build tree. Legacy expression mode and `Evaluate` retain their previous behavior;
+ICode/HTML remain illustrative numeric output with explicit object-operation
+errors, rather than a backend for the interpreter.
+
 ## Roadmap: basic C language subset
 
-Steps 1–7 below are implemented. Step 8 is the remaining optional execution
-expansion; the existing numeric interpreter remains available.
+All steps below are implemented within their documented limits. The validated
+`Interpreter` and the original numeric `Evaluate` API are both available.
 
 The first target is a documented subset of C99 syntax for a single translation
 unit: scalar types, typedefs, pointers, fixed-size arrays, simple structs and
@@ -263,7 +323,8 @@ not claim full C99 conformance.
 
 Parsing, semantic validation, and execution are separate capabilities. The parser
 produces the chosen subset's AST; the independent semantic pass checks names and
-types. The evaluator remains the numeric subset described above.
+types. `Interpreter` executes validated programs; `Evaluate` remains the legacy
+numeric subset described above.
 
 1. **Define the grammar and acceptance cases.**
    Status: complete. See the [subset contract and support matrix](docs/c-subset.md)
@@ -349,7 +410,7 @@ types. The evaluator remains the numeric subset described above.
    [aggregate notes](docs/c-subset.md#aggregates-and-initialization) and
    [examples/aggregates.c](examples/aggregates.c). CTest covers struct layout and
    member access, enum constants, array bounds, initializer shape, and round trips.
-   Aggregate execution remains deferred to step 8.
+   Aggregate execution is available through step 8's validated `Interpreter`.
 
    - Parse simple struct and enum definitions, tagged forward declarations,
      fixed-size arrays, scalar initializers, positional brace initializers,
@@ -379,6 +440,11 @@ types. The evaluator remains the numeric subset described above.
      acceptance cases, existing regressions pass, and exclusions fail clearly.
 
 8. **Optionally expand execution after the parser milestone.**
+   Status: complete for the validated interpreter. See [execution support](#validated-execution)
+   and [runtime details](docs/c-subset.md#validated-execution). Object operations
+   execute in `Interpreter`; illustrative ICode/HTML support numeric do/switch
+   control flow and explicitly reject unsupported object operations.
+
    - Align scalar evaluation with the documented data model, then implement
      object storage, lvalue references, pointers, arrays, strings, aggregate
      initialization, member access, and `sizeof`. Add execution for the new

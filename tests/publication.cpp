@@ -255,6 +255,9 @@ namespace {
                 mx::ICode code;
                 mx::HTMLCode html;
                 for (auto visitor : std::vector<mx::ASTVisitor *>{&evaluator, &code, &html}) {
+                    bool control = dynamic_cast<mx::DoWhileNode *>(node) || dynamic_cast<mx::SwitchNode *>(node) || dynamic_cast<mx::CaseNode *>(node) || dynamic_cast<mx::DefaultNode *>(node);
+                    if (visitor != &evaluator && control)
+                        continue;
                     try {
                         node->accept(*visitor);
                         check(false, "Runtime visitor silently accepted " + node->to_string());

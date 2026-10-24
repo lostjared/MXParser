@@ -215,13 +215,10 @@ namespace mx {
         SemanticSymbolTable table;
         std::unordered_map<const ExprNode *, ExpressionInfo> facts;
         std::unordered_map<std::string, SemanticSymbolTable::Entry> external_functions;
-        struct Member {
-            std::string name;
-            TypePtr type;
-            SourceLocation location;
-            size_t offset;
-        };
+        using Member = SemanticMember;
         std::unordered_map<size_t, std::vector<Member>> members;
+        std::unordered_map<const Declarator *, SemanticSymbolTable::Entry> declarations;
+        std::unordered_map<const Parameter *, SemanticSymbolTable::Entry> parameter_symbols;
         std::unordered_map<const Type *, TypePtr> definitions;
         size_t loop_depth = 0;
         struct SwitchContext {
@@ -423,7 +420,9 @@ namespace mx {
                 if (parameter && parameter->name.get_type() != TOKEN_TYPE::TOKEN_NULL) {
                     auto name = parameter->name.get_token();
                     require(!table.lookup_current(name), SourceLocation::from_token(parameter->name), "Duplicate parameter: " + name);
-                    table.enter(table.depth() - 1, name, entry(SemanticSymbolKind::Object, type, SourceLocation::from_token(parameter->name)));
+                    auto symbol = entry(SemanticSymbolKind::Object, type, SourceLocation::from_token(parameter->name));
+                    table.enter(table.depth() - 1, name, symbol);
+                    parameter_symbols[parameter] = symbol;
                 }
             }
             return types;
@@ -968,6 +967,7 @@ namespace mx {
                     type = initialize(type, *declarator.initializer, table.depth() == 1);
                     table.lookup_current(name)->type = type;
                 }
+                declarations[&declarator] = table.lookup_current(name);
             }
         }
         void analyze(const ASTNode &node) {
@@ -1088,5 +1088,8 @@ namespace mx {
             implementation->analyze(*declaration);
     }
     const ExpressionInfo &SemanticAnalyzer::info(const ExprNode &expression) const { return implementation->facts.at(&expression); }
+    const SemanticSymbol &SemanticAnalyzer::symbol(const Declarator &declaration) const { return *implementation->declarations.at(&declaration); }
+    const SemanticSymbol &SemanticAnalyzer::symbol(const Parameter &parameter) const { return *implementation->parameter_symbols.at(&parameter); }
+    const std::vector<SemanticMember> &SemanticAnalyzer::members(const TypePtr &type) const { return implementation->members.at(type->unqualified().tag_identity); }
     const SemanticSymbolTable &SemanticAnalyzer::symbols() const { return implementation->table; }
 } // namespace mx

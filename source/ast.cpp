@@ -64,6 +64,8 @@ namespace mx {
     } // namespace
 
     void ICode::clear() {
+        loop_labels.clear();
+        switch_labels.clear();
         values.clear();
         stream.str("");
         stream.clear();

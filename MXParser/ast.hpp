@@ -425,6 +425,10 @@ namespace mx {
         void visit(DeclarationNode &node) override;
         void visit(IfNode &node) override;
         void visit(WhileNode &node) override;
+        void visit(DoWhileNode &node) override;
+        void visit(SwitchNode &node) override;
+        void visit(CaseNode &node) override;
+        void visit(DefaultNode &node) override;
         void visit(ForNode &node) override;
         void visit(JumpNode &node) override;
         std::string code();
@@ -437,6 +441,7 @@ namespace mx {
         std::vector<std::string> values;
         std::int64_t temp = 0;
         std::vector<std::pair<std::string, std::string>> loop_labels;
+        std::vector<std::unordered_map<const ASTNode *, std::string>> switch_labels;
         void emit_statement(ASTNode &node);
     };
 
@@ -458,6 +463,10 @@ namespace mx {
         void visit(DeclarationNode &node) override { generator.visit(node); }
         void visit(IfNode &node) override { generator.visit(node); }
         void visit(WhileNode &node) override { generator.visit(node); }
+        void visit(DoWhileNode &node) override { generator.visit(node); }
+        void visit(SwitchNode &node) override { generator.visit(node); }
+        void visit(CaseNode &node) override { generator.visit(node); }
+        void visit(DefaultNode &node) override { generator.visit(node); }
         void visit(ForNode &node) override { generator.visit(node); }
         void visit(JumpNode &node) override { generator.visit(node); }
         std::string code();

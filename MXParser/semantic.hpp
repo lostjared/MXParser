@@ -31,6 +31,13 @@ namespace mx {
         std::shared_ptr<const SemanticSymbol> symbol;
     };
 
+    struct SemanticMember {
+        std::string name;
+        TypePtr type;
+        SourceLocation location;
+        size_t offset;
+    };
+
     /** Validate a translation unit without executing it. Keep its AST alive while reading expression facts. */
     class SemanticAnalyzer {
       public:
@@ -41,6 +48,9 @@ namespace mx {
         void validate(const ProgramNode &program);
         const ExpressionInfo &info(const ExprNode &expression) const;
         const SemanticSymbolTable &symbols() const;
+        const SemanticSymbol &symbol(const Declarator &declaration) const;
+        const SemanticSymbol &symbol(const Parameter &parameter) const;
+        const std::vector<SemanticMember> &members(const TypePtr &type) const;
 
       private:
         struct Implementation;

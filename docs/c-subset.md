@@ -1,6 +1,6 @@
 # Basic C subset contract
 
-This is the implemented acceptance contract for README roadmap steps 1–7.
+This is the implemented acceptance contract for README roadmap steps 1–8.
 It describes a restricted C99 subset, not full C99 conformance or execution
 support for every accepted program.
 The [fixture manifest](../tests/subset/manifest.tsv) maps examples to milestones.
@@ -9,26 +9,26 @@ The [fixture manifest](../tests/subset/manifest.tsv) maps examples to milestones
 
 "Partial" means the restrictions below matter. `SemanticAnalyzer` now provides
 an independent validation pass for the implemented grammar, including code that
-never executes. Steps 1–7 implement and audit the grammar and validation described below. Execution support remains the numeric interpreter subset.
+never executes. Steps 1–7 implement and audit the grammar and validation described below. Step 8 adds the validated `Interpreter`; the legacy `Evaluate` visitor remains a numeric subset.
 
 | Feature | Current parsing | Current validation / execution | Target parsing / validation | Step | Acceptance fixtures |
 | --- | --- | --- | --- | --- | --- |
 | Arithmetic, assignments, calls, comma, `?:`, casts | Yes | Static operand/lvalue/conversion checks; numeric execution | Implemented for current types | 2, 4 | `expressions`, `invalid-lvalue`, `bad-operands` |
 | Integer, floating, character, adjacent string literals | Yes | Typed numeric facts and decoded narrow literals; numeric execution | Yes / typed, decoded literals | 2, 6 | `literals`, `scalars` |
-| Scalar types and qualifiers | Structured scalar/qualified types | LP64 validation and qualifier checks; interpreter still uses signed 64-bit storage/double arithmetic | Implemented for current types | 2, 4 | `scalars`, `bad-type`, `const-write`, `bad-restrict` |
+| Scalar types and qualifiers | Structured scalar/qualified types | LP64 validation and qualifier checks; validated interpreter uses LP64 arithmetic; legacy Evaluate uses signed 64-bit storage/double | Implemented for current types | 2, 4 | `scalars`, `bad-type`, `const-write`, `bad-restrict` |
 | Numeric globals, locals, multiple declarators, block scopes | Yes; independent derived types | Static lexical resolution and redeclaration checks; numeric execution | Implemented | 3, 4 | `numeric-program`, `mixed-declarators`, `duplicate-local` |
 | Prototypes, definitions, typed parameters, recursion, void | Yes | Static compatibility, arity, argument and return checks; direct numeric calls execute | Implemented for typed prototypes | 3, 4 | `numeric-program`, `prototype-conflict`, `bad-call`, `bad-return` |
 | Scoped typedefs and ordinary-name shadowing | Yes; expression API can also register type names | Numeric aliases execute; parser tracks declaration visibility | Yes / scoped typedef disambiguation implemented | 3 | `typedef-scope`, `bad-typedef` |
-| Pointers, arrays, parenthesized and abstract declarators | Yes within the chosen restrictions; array parameters adjust to pointers | No pointer/array execution; constant positive bounds validated | Yes / bound and complete-type checks | 3, 6 | `declarators`, `abstract-types`, `array-parameter`, `bad-declarator` |
-| `sizeof`, address/dereference, `.`, `->`, subscripting | Yes | Static pointer/complete-type checks, member lookup, and LP64 layout | Yes / validated member access; no execution | 4, 6 | `expressions`, `abstract-types`, `aggregates`, `unknown-member` |
+| Pointers, arrays, parenthesized and abstract declarators | Yes within the chosen restrictions; array parameters adjust to pointers | Typed pointer/array storage and execution; constant positive bounds validated | Yes / bound and complete-type checks | 3, 6 | `declarators`, `abstract-types`, `array-parameter`, `bad-declarator` |
+| `sizeof`, address/dereference, `.`, `->`, subscripting | Yes | Static pointer/complete-type checks, member lookup, and LP64 layout | Yes / validated and executable member access | 4, 6 | `expressions`, `abstract-types`, `aggregates`, `unknown-member` |
 | Blocks, empty statements, `if`/`else`, `while`, `for`, jumps | Yes | Static scalar-condition and jump-context checks; numeric execution | Implemented for existing statements | 4, 5 | `numeric-program`, `dangling-else`, `bad-break`, `bad-continue` |
-| `do`/`while`, `switch`, `case`, `default`, fallthrough | Yes; label order and nesting preserved | Static condition, constant-case, duplicate/default and context checks; execution/ICode deferred | Implemented for existing integer types | 5 | `structured-statements`, `bad-case`, `duplicate-case`, `duplicate-default`, `switch-continue` |
-| Struct definitions and forward declarations | Named/anonymous definitions and tagged forward declarations | Separate scoped tags, layout, completeness, and members; no execution | Yes / recursive objects rejected | 4, 6 | `aggregates`, `incomplete-object`, `recursive-object` |
-| Enum definitions and integer constant expressions | Named/anonymous definitions and tag references | Enum values, integer constant expressions, and positive bounds; no execution | Yes / constant values and positive array bounds | 6 | `aggregates`, `bad-bound`, `nonconstant-bound` |
-| Scalar, positional brace, and character-array string initializers | Yes, with explicit aggregate braces | Recursive shape/type checks, inferred extents, narrow escapes; numeric execution only | Yes / type, shape, and bounds checking | 6 | `initializers`, `bad-initializer` |
+| `do`/`while`, `switch`, `case`, `default`, fallthrough | Yes; label order and nesting preserved | Static condition, constant-case, duplicate/default and context checks; validated execution and illustrative numeric ICode | Implemented for existing integer types | 5 | `structured-statements`, `bad-case`, `duplicate-case`, `duplicate-default`, `switch-continue` |
+| Struct definitions and forward declarations | Named/anonymous definitions and tagged forward declarations | Separate scoped tags, layout, completeness, members, and object execution | Yes / recursive objects rejected | 4, 6 | `aggregates`, `incomplete-object`, `recursive-object` |
+| Enum definitions and integer constant expressions | Named/anonymous definitions and tag references | Enum values, integer constant expressions, positive bounds, and execution | Yes / constant values and positive array bounds | 6 | `aggregates`, `bad-bound`, `nonconstant-bound` |
+| Scalar, positional brace, and character-array string initializers | Yes, with explicit aggregate braces | Recursive shape/type checks, inferred extents, narrow escapes, and initialization | Yes / type, shape, and bounds checking | 6 | `initializers`, `bad-initializer` |
 | File-scope `static` and `extern` | Preserved in AST and printing | Static storage/linkage conflict checks and compatible repeated declarations | Implemented within one translation unit; no linking | 3, 4 | `storage`, `bad-storage` |
 | AST source locations and useful diagnostics | AST start locations and parser exception locations | Line, column when available, offending token, expected syntax; lexer reason retained | Implemented for current grammar | 2 | `missing-semicolon`, `unexpected-eof` |
-| Combined translation unit and AST round trip | Yes | Syntax/type checks, AST round trips, optional C99 compiler comparison; numeric execution only | Verified within the chosen subset | 7 | `combined` |
+| Combined translation unit and AST round trip | Yes | Syntax/type checks, AST round trips, C99 comparisons, and validated execution | Verified within the chosen subset | 7 | `combined` |
 | Excluded features listed below | Some forms parse before semantic rejection | Named exclusion diagnostics; no execution | Verified rejection at the applicable phase | 1, 7 | All `excluded-*` fixtures |
 
 Fixture names in this document omit `.c`. Every negative fixture has an expected
@@ -86,7 +86,7 @@ assertions about today's exact exception text.
   Layout uses the documented scalar sizes, natural alignment capped at eight
   bytes, member padding, and trailing padding. Objects require complete types;
   pointer self-references are valid. Struct assignment and value parameters and
-  returns are included in semantic validation, with execution deferred.
+  returns are included in semantic validation and `Interpreter` execution.
 - Initializers are scalar assignment expressions, recursively nested positional
   braces for arrays/structs, and narrow strings for character arrays. Allow
   trailing commas, zero-fill omitted aggregate elements, and infer omitted outer
@@ -414,8 +414,8 @@ alive while reading facts; the next `validate()` resets prior results, including
 after a failure. `symbols()` exposes the remaining translation-unit scope;
 expression facts retain local-symbol references after local scopes close.
 
-The interpreter has not adopted this LP64 arithmetic model: it still uses signed
-64-bit integer storage and double arithmetic as documented above. Static type
+The legacy `Evaluate` visitor retains signed 64-bit integer storage and double
+arithmetic. The validated `Interpreter` added in step 8 uses this LP64 model. Static type
 approval therefore does not promise C-equivalent evaluation or pointer execution.
 Step 6 extends this pass with aggregates, initialization, and constant positive
 bounds as described below. `sizeof` validates unevaluated operand types and
@@ -462,10 +462,10 @@ constant arithmetic do not supply case constants. Step 6 also supplies prior enu
 constants and validated constant array bounds to the same case-folding machinery.
 
 New visitor overloads have throwing defaults, preserving source compatibility
-for existing visitors. The evaluator, intermediate-code generator, and HTML
-visitor currently report these statements as unsupported. This is deliberate:
-their execution is planned for step 8. The statement suite verifies those errors
-and evaluator recovery, rather than claiming runtime fallthrough support.
+for existing visitors. The legacy `Evaluate` visitor still reports these statements
+as unsupported. Step 8's `Interpreter` executes them, and ICode/HTML now emit
+numeric do/switch control flow. Tests cover both the new execution and the legacy
+visitor's explicit errors.
 
 ```bash
 ./build/cmake/parse-expr --syntax-program examples/statements.c
@@ -538,7 +538,7 @@ and aggregate copy initializers are parsed as syntax and rejected by validation;
 their manifest entries retain semantic rejection. Designators, unions, bit-fields,
 and enum forward declarations retain explicit parser rejections. The evaluator
 and code generators report aggregate definitions/brace initialization as unsupported;
-aggregate storage, zero filling, and execution remain step 8 work.
+the validated `Interpreter` supplies aggregate storage, zero filling, and execution.
 
 ## Publication and verification
 
@@ -546,8 +546,8 @@ Step 7 completes the parser milestone. The README contains the current capabilit
 matrix, and `examples/subset.c` combines tagged/recursive pointer types, enums,
 inferred arrays of structs, nested initializers, narrow strings, qualified pointer
 parameters, struct-valued calls, member access, loops, switch labels, dangling
-`else`, and numeric expressions. It is a syntax/validation example; it requires
-step 8's object and control-flow execution work to run in the interpreter.
+`else`, and numeric expressions. It is also executable through `parse-expr --run-program examples/subset.c` after
+step 8, returning 2.
 
 The final manifest is enforced by `subset-fixtures` for all milestones. Atomic
 qualifiers, `inline`, wide literals, and address initializers remain syntax
@@ -588,6 +588,89 @@ ctest --test-dir build/cmake --output-on-failure
 ctest --test-dir build/cmake -R 'subset-(fixtures|publication|c99-comparison)' --output-on-failure
 ```
 
-Remaining execution limitations are listed in the README matrix. Parsing and
-validation do not promise runtime object storage, aggregate initialization,
-pointer operations, `sizeof` evaluation, or the new switch/do control flow.
+The validated execution API and its limits are described below. Legacy visitors
+and illustrative code generation have narrower support than `Interpreter`.
+
+## Validated execution
+
+`Interpreter::load(program)` validates before allocating objects and building
+function execution plans. The AST must stay alive until its replacement or the
+interpreter's destruction. A failed load leaves the old program available; a
+successful load replaces globals and functions. `call(name, arguments)` defaults
+to `main` and returns `ExecutionValue` (`monostate`, signed/unsigned 64-bit integer,
+or `double`). The public boundary exchanges scalars; object pointers and struct
+values are supported between interpreted C functions. Public object-result calls
+report an explicit error; expose a scalar C wrapper when needed.
+
+The semantic API now exposes resolved object/parameter symbols through
+`symbol(declarator)` and `symbol(parameter)`, and complete canonical struct
+members through `members(type)`. This metadata remains valid until the next
+validation. The interpreter uses symbol identity rather than runtime name lookup,
+so typedefs, shadowing, parameters, globals, and block-scope prototypes retain
+their validated bindings.
+
+Integer execution uses each expression's resolved type, promotions, and usual
+arithmetic conversions. Unsigned results wrap at their target width; signed
+arithmetic/left-shift overflow, division by zero, invalid shifts, and out-of-range
+floating-to-integer conversions fail. Signed narrowing uses the fixed model's
+two's-complement low bits, and signed right shift is arithmetic. Float operations
+and conversions round through binary32; double/long double use binary64. Results
+retain unsigned precision in the public value variant. Boolean conversion accepts
+numeric values and pointers. Short-circuit and conditional expressions evaluate
+only the selected operands, and `sizeof` uses semantic size facts without reading
+or executing its operand.
+
+Storage consists of typed scalar cells at validated array/member offsets.
+Automatic objects have scope lifetimes; file-scope objects have static storage and
+zero initialization. Uninitialized automatic scalar reads fail. Initializers fill
+explicit positions in order and zero omitted aggregate subobjects; a scalar
+initializer cannot read its own indeterminate value. Narrow strings have static,
+read-only storage and decode standard/octal/hex escapes. Struct assignment and
+argument/return passing copy cell values, including array members, without aliasing
+those subobjects. Object pointers stored inside structs remain pointers to their
+original objects.
+
+Object references carry an allocation, offset, and originating subobject/array
+bounds. Pointer arithmetic, comparisons, and differences preserve those bounds;
+forming a one-past address is allowed, accessing it is rejected. Expired object
+access, null dereference, read-only writes, unrelated-array pointer subtraction,
+and incompatible representation access fail explicitly. Void/object-pointer
+round trips preserve identity. Casts do not widen a member pointer's bounds to a
+containing struct. Byte-level aliasing into other object representations,
+arbitrary host-address access, external libraries, dynamic
+allocation functions, and linking are unsupported. This interpreter does not
+prove or diagnose every C undefined behavior (including unsequenced access,
+restrict violations, and all effective-type rules).
+
+Function plans retain lexical scope paths at each instruction and label. Jumps
+leave expired scopes and enter skipped scopes with uninitialized automatic
+objects, so switch labels inside nested loops/conditionals work without flattening
+their AST. Switch controls execute once, case constants use promoted conversion,
+fallthrough follows source order, `break` leaves the nearest loop/switch, and
+`continue` reaches the nearest loop's update/test. Calls and full-expression
+aggregate temporaries clean up on return or error. Completed global writes are
+retained when a later operation fails.
+
+`ExecutionLimits` sets an instruction budget (default 1,000,000 per call/load),
+recursion depth (256), and maximum single object size (1 MiB). Expired object
+metadata is retained until program replacement for reliable dangling-pointer
+checks. `ExecutionException` carries runtime source locations; validation still
+uses `SemanticException`.
+
+ICode/HTML now emit numeric `do`/`while`, switch dispatch, case/default labels,
+fallthrough, and separate break/continue targets. They remain illustrative output,
+not executable interpreter plans or native code. Object storage/signatures,
+aggregate initialization, string/character literals, pointer operations, members,
+subscripts, and `sizeof` have explicit unsupported-operation errors in these
+visitors. The old `Evaluate` API is unchanged for compatibility and remains
+numeric; use `Interpreter` or `--run-program` for LP64/object execution.
+
+CTest adds `execution`, `subset-example-run`, and, with a system compiler,
+`execution-c99-comparison`. The latter builds and executes defined-result examples
+on an LP64 host and compares printed scalar results with `--run-program`.
+Host-specific `long double` storage is excluded from native size comparisons,
+while its fixed-model size is unit tested separately. Tests also cover unsigned
+precision, arithmetic conversions, lifetimes, aggregate copies, one-time lvalue
+evaluation, nested switch/loop targets, runtime failures, resource limits, failed
+load recovery, and successful calls after runtime errors. Generated source,
+objects, executables, and comparison manifests stay in the build directory.

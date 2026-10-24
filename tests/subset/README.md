@@ -65,3 +65,8 @@ original and printed fixture and `examples/subset.c` with
 `-std=c99 -pedantic-errors -fsyntax-only`. It leaves generated C in the build tree
 and does not link or execute it. Set `MXPARSER_C99_COMPILER` to select the compiler;
 CMake reports when no compiler is available to register this optional test.
+
+Step 8 adds a separate `execution` suite and `execution-c99-comparison` for the
+validated `Interpreter`. Fixture parsing/type checks remain independent of runtime
+execution; prototype-only programs are still valid syntax inputs. Use
+`parse-expr --run-program examples/subset.c` to execute the combined example.

@@ -18,6 +18,7 @@ add_library(mxparser STATIC
     source/evaluate.cpp
     source/functions.cpp
     source/type.cpp
+    source/interpreter.cpp
     source/semantic.cpp
 )
 
@@ -122,6 +123,12 @@ if(BUILD_TESTING)
     add_test(NAME aggregates COMMAND aggregate-tests)
     add_test(NAME aggregate-syntax COMMAND parse-expr --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/aggregates.c)
     add_test(NAME aggregate-check COMMAND parse-expr --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/aggregates.c)
+    add_executable(execution-tests tests/execution.cpp)
+    target_link_libraries(execution-tests PRIVATE mxparser MXLex::mxlex)
+    target_compile_options(execution-tests PRIVATE -Wall -Wextra -pedantic)
+    add_test(NAME execution COMMAND execution-tests ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
+    add_test(NAME subset-example-run COMMAND parse-expr --run-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
+    set_tests_properties(subset-example-run PROPERTIES PASS_REGULAR_EXPRESSION "Result: 2")
     add_executable(publication-tests tests/publication.cpp)
     target_link_libraries(publication-tests PRIVATE mxparser MXLex::mxlex)
     target_compile_options(publication-tests PRIVATE -Wall -Wextra -pedantic)
@@ -130,6 +137,13 @@ if(BUILD_TESTING)
     add_test(NAME subset-example-check COMMAND parse-expr --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
     find_program(MXPARSER_C99_COMPILER NAMES cc gcc clang DOC "C compiler for C99 subset syntax comparisons")
     if(MXPARSER_C99_COMPILER)
+        add_test(NAME execution-c99-comparison COMMAND ${CMAKE_COMMAND}
+            "-DCOMPILER=${MXPARSER_C99_COMPILER}"
+            "-DPARSER=$<TARGET_FILE:parse-expr>"
+            "-DTESTER=$<TARGET_FILE:execution-tests>"
+            "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/runtime-comparison"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/runtime-compiler.cmake)
         add_test(NAME subset-c99-comparison COMMAND ${CMAKE_COMMAND}
             "-DCOMPILER=${MXPARSER_C99_COMPILER}"
             "-DPARSER=$<TARGET_FILE:parse-expr>"

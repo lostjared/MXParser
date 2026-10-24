@@ -1,4 +1,6 @@
 #include "MXParser/parser.hpp"
+#include <algorithm>
+#include <functional>
 
 namespace mx {
     namespace {
@@ -153,6 +155,11 @@ namespace mx {
             emit_statement(*declaration);
     }
     void ICode::visit(FunctionNode &node) {
+        if (node.result_type()->unqualified().kind != TypeKind::Scalar)
+            throw std::runtime_error("Code generation does not support object-valued function signatures");
+        for (const auto &parameter : node.parameters)
+            if (parameter.declared_type()->unqualified().kind != TypeKind::Scalar)
+                throw std::runtime_error("Code generation does not support object-valued function signatures");
         if (!node.body) {
             stream << "PROTO " << node.name.get_token() << ", " << node.result_type()->to_string() << "\n";
             return;
@@ -180,8 +187,8 @@ namespace mx {
             return;
         for (auto &declarator : node.declarators) {
             auto type = declarator.type ? declarator.type : node.declared_type();
-            if (type->unqualified().kind == TypeKind::Function)
-                throw std::runtime_error("Code generation does not support block-scope function declarations");
+            if (type->unqualified().kind != TypeKind::Scalar)
+                throw std::runtime_error("Code generation does not support object storage or block-scope function declarations");
             stream << "VAR " << declarator.name.get_token() << ", " << type->to_string() << "\n";
             if (declarator.initializer) {
                 declarator.initializer->accept(*this);
@@ -249,10 +256,89 @@ namespace mx {
             emit_statement(*node.update);
         stream << "JMP " << start << "\nLABEL " << done << "\nENDSCOPE\n";
     }
+    void ICode::visit(DoWhileNode &node) {
+        auto start = get_temp(), test = get_temp(), done = get_temp();
+        stream << "LABEL " << start << "\n";
+        loop_labels.emplace_back(done, test);
+        try {
+            emit_statement(*node.body);
+        } catch (...) {
+            loop_labels.pop_back();
+            throw;
+        }
+        loop_labels.pop_back();
+        stream << "LABEL " << test << "\n";
+        node.condition->accept(*this);
+        stream << "JNZ " << values.back() << ", " << start << "\nLABEL " << done << "\n";
+        values.pop_back();
+    }
+    void ICode::visit(SwitchNode &node) {
+        std::unordered_map<const ASTNode *, std::string> labels;
+        std::vector<CaseNode *> cases;
+        std::string done = get_temp(), fallback = done;
+        std::function<void(ASTNode &)> collect = [&](ASTNode &statement) {
+            if (dynamic_cast<SwitchNode *>(&statement))
+                return;
+            if (auto n = dynamic_cast<CaseNode *>(&statement)) {
+                labels[n] = get_temp();
+                cases.push_back(n);
+                collect(*n->statement);
+            } else if (auto n = dynamic_cast<DefaultNode *>(&statement)) {
+                labels[n] = get_temp();
+                fallback = labels[n];
+                collect(*n->statement);
+            } else if (auto n = dynamic_cast<BlockNode *>(&statement)) {
+                for (auto &child : n->statements)
+                    collect(*child);
+            } else if (auto n = dynamic_cast<IfNode *>(&statement)) {
+                collect(*n->then_statement);
+                if (n->else_statement)
+                    collect(*n->else_statement);
+            } else if (auto n = dynamic_cast<WhileNode *>(&statement))
+                collect(*n->body);
+            else if (auto n = dynamic_cast<DoWhileNode *>(&statement))
+                collect(*n->body);
+            else if (auto n = dynamic_cast<ForNode *>(&statement))
+                collect(*n->body);
+        };
+        collect(*node.body);
+        node.condition->accept(*this);
+        auto control = get_temp();
+        stream << "SET " << control << ", " << values.back() << "\n";
+        values.pop_back();
+        for (auto label : cases)
+            stream << "JEQ " << control << ", " << label->value->to_string() << ", " << labels.at(label) << "\n";
+        stream << "JMP " << fallback << "\n";
+        loop_labels.emplace_back(done, "");
+        switch_labels.push_back(std::move(labels));
+        try {
+            emit_statement(*node.body);
+        } catch (...) {
+            loop_labels.pop_back();
+            switch_labels.pop_back();
+            throw;
+        }
+        loop_labels.pop_back();
+        switch_labels.pop_back();
+        stream << "LABEL " << done << "\n";
+    }
+    void ICode::visit(CaseNode &node) {
+        if (switch_labels.empty() || !switch_labels.back().contains(&node))
+            throw std::runtime_error("Code generation does not support case labels outside a switch");
+        stream << "LABEL " << switch_labels.back().at(&node) << "\n";
+        emit_statement(*node.statement);
+    }
+    void ICode::visit(DefaultNode &node) {
+        if (switch_labels.empty() || !switch_labels.back().contains(&node))
+            throw std::runtime_error("Code generation does not support default labels outside a switch");
+        stream << "LABEL " << switch_labels.back().at(&node) << "\n";
+        emit_statement(*node.statement);
+    }
     void ICode::visit(JumpNode &node) {
-        if (loop_labels.empty())
-            throw std::runtime_error("break/continue outside loop");
-        stream << "JMP " << (node.is_break ? loop_labels.back().first : loop_labels.back().second) << "\n";
+        auto target = std::find_if(loop_labels.rbegin(), loop_labels.rend(), [&](const auto &labels) { return node.is_break || !labels.second.empty(); });
+        if (target == loop_labels.rend())
+            throw std::runtime_error("break/continue outside enclosing context");
+        stream << "JMP " << (node.is_break ? target->first : target->second) << "\n";
     }
     void ICode::write_to_stream(std::ostream &out) { out << code(); }
     std::string HTMLCode::code() {

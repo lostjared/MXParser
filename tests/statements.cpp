@@ -187,7 +187,7 @@ namespace {
         mx::ICode code;
         mx::HTMLCode html;
         LegacyVisitor legacy;
-        for (auto visitor : std::vector<mx::ASTVisitor *>{&evaluator, &code, &html, &legacy}) {
+        for (auto visitor : std::vector<mx::ASTVisitor *>{&evaluator, &legacy}) {
             for (auto node : std::vector<mx::ASTNode *>{main.body->statements[0].get(), &selection, labels.statements[0].get(), labels.statements[1].get()}) {
                 try {
                     node->accept(*visitor);
@@ -197,10 +197,13 @@ namespace {
                 }
             }
         }
+        ast->accept(code);
+        ast->accept(html);
+        check(code.code().find("JEQ ") != std::string::npos && code.code().find("JNZ ") != std::string::npos, "do/switch code generation");
         ast->accept(evaluator);
         try {
             evaluator.call("main");
-            check(false, "New statements must not execute before step 8");
+            check(false, "Legacy Evaluate must report unsupported statements");
         } catch (const std::runtime_error &) {
         }
         evaluator.call("good");
