@@ -26,7 +26,7 @@ namespace mx {
         }
         bool integer(const TypePtr &type) {
             auto t = bare(type);
-            return t && t->kind == K::Scalar && t->scalar != S::Void && !floating(t);
+            return t && ((t->kind == K::Tagged && t->tag == TagKind::Enum) || (t->kind == K::Scalar && t->scalar != S::Void && !floating(t)));
         }
         bool arithmetic(const TypePtr &type) { return integer(type) || floating(type); }
         bool void_type(const TypePtr &type) {
@@ -87,7 +87,9 @@ namespace mx {
                 return t->scalar != S::Void;
             if (t->kind == K::Pointer)
                 return true;
-            return t->kind == K::Array && (t->bound || t->bound_expression) && complete(t->element);
+            if (t->kind == K::Tagged)
+                return t->layout && t->layout->complete;
+            return t->kind == K::Array && t->bound && *t->bound > 0 && complete(t->element);
         }
         TypePtr decay(const TypePtr &type) {
             auto t = bare(type);
@@ -160,6 +162,8 @@ namespace mx {
             throw std::invalid_argument("Missing type");
         if (t->kind == K::Pointer)
             return 8;
+        if (t->kind == K::Tagged && t->layout && t->layout->complete)
+            return t->layout->size;
         if (t->kind == K::Array && t->bound && *t->bound != 0) {
             auto element = size_of(t->element);
             if (*t->bound > SIZE_MAX / element)
@@ -188,7 +192,7 @@ namespace mx {
     TypePtr ScalarDataModel::integer_promotion(const TypePtr &type) {
         if (!integer(type))
             throw std::invalid_argument("Integer promotion requires integer type");
-        return rank(bare(type)->scalar) < rank(S::Int) ? Type::scalar_type(S::Int) : bare(type);
+        return bare(type)->kind == K::Tagged || rank(bare(type)->scalar) < rank(S::Int) ? Type::scalar_type(S::Int) : bare(type);
     }
     TypePtr ScalarDataModel::arithmetic_type(const TypePtr &left, const TypePtr &right) {
         if (!arithmetic(left) || !arithmetic(right))
@@ -211,6 +215,14 @@ namespace mx {
         SemanticSymbolTable table;
         std::unordered_map<const ExprNode *, ExpressionInfo> facts;
         std::unordered_map<std::string, SemanticSymbolTable::Entry> external_functions;
+        struct Member {
+            std::string name;
+            TypePtr type;
+            SourceLocation location;
+            size_t offset;
+        };
+        std::unordered_map<size_t, std::vector<Member>> members;
+        std::unordered_map<const Type *, TypePtr> definitions;
         size_t loop_depth = 0;
         struct SwitchContext {
             TypePtr promoted_type;
@@ -241,17 +253,107 @@ namespace mx {
             require((specifier == "typedef") == typedef_declaration, where, "Invalid typedef storage class");
             return specifier == "static";
         }
+        size_t alignment(const TypePtr &type) {
+            auto t = bare(type);
+            if (t->kind == K::Array)
+                return alignment(t->element);
+            if (t->kind == K::Tagged)
+                return t->layout->alignment;
+            return std::min(size_t(8), ScalarDataModel::size_of(t));
+        }
+        bool contains_const(const TypePtr &type) {
+            auto t = bare(type);
+            if (type->top_qualifiers().is_const)
+                return true;
+            if (t->kind == K::Array)
+                return contains_const(t->element);
+            return t->kind == K::Tagged && t->layout && t->layout->const_member;
+        }
+        size_t aligned(size_t size, size_t align, const SourceLocation &where) {
+            require(size <= SIZE_MAX - (align - 1), where, "Struct layout exceeds the data model");
+            return (size + align - 1) / align * align;
+        }
         TypePtr tag(const TypePtr &raw, const SourceLocation &where, bool introduce = false) {
             auto type = bare(raw);
+            if (type->tag_identity)
+                return type;
             require(type->tag != TagKind::Union, where, "Unsupported feature: union types");
-            require(type->tag != TagKind::Enum, where, "Enum definitions and constants are not implemented");
-            auto found = introduce ? table.lookup_current(type->name, true) : table.lookup(type->name, true);
-            if (found) {
+            if (auto cached = definitions.find(type.get()); cached != definitions.end())
+                return cached->second;
+            bool defining = bool(type->definition);
+            auto found = (introduce || defining) ? table.lookup_current(type->name, true) : table.lookup(type->name, true);
+            if (type->name.empty())
+                found = {};
+            if (found)
                 require(bare(found->type)->tag == type->tag, where, "Conflicting tag kind: " + type->name);
-                return found->type;
+            require(type->tag != TagKind::Enum || defining || found, where, "Unsupported feature: enum forward declaration");
+            TypePtr canonical;
+            if (found)
+                canonical = found->type;
+            else {
+                canonical = Type::tagged(type->tag, type->name, next_tag_identity.fetch_add(1, std::memory_order_relaxed), {}, std::make_shared<TagLayout>());
+                if (!type->name.empty())
+                    table.enter(table.depth() - 1, type->name, entry(SemanticSymbolKind::Tag, canonical, where), true);
             }
-            auto canonical = Type::tagged(type->tag, type->name, next_tag_identity.fetch_add(1, std::memory_order_relaxed));
-            table.enter(table.depth() - 1, type->name, entry(SemanticSymbolKind::Tag, canonical, where), true);
+            if (!defining)
+                return canonical;
+            require(!canonical->layout->complete && !canonical->layout->defining, where, "Duplicate tag definition: " + type->name);
+            canonical->layout->defining = true;
+            definitions[type.get()] = canonical;
+            const auto &definition = *type->definition;
+            if (type->tag == TagKind::Enum) {
+                int64_t next_value = 0;
+                for (const auto &enumerator : definition.enumerators) {
+                    auto location = SourceLocation::from_token(enumerator.name);
+                    int64_t value = next_value;
+                    if (enumerator.value) {
+                        auto info = infer(*enumerator.value);
+                        require(integer(info.type) && info.constant_expression && info.integer_constant.has_value(), enumerator.value->location, "Enumerator requires an integer constant expression");
+                        if (unsigned_type(bare(info.type)->scalar)) {
+                            require(*info.integer_constant <= INT32_MAX, location, "Enumerator value must fit int");
+                            value = static_cast<int64_t>(*info.integer_constant);
+                        } else
+                            value = signed_value(*info.integer_constant, info.type);
+                    }
+                    require(value >= INT32_MIN && value <= INT32_MAX, location, "Enumerator value must fit int");
+                    auto name = enumerator.name.get_token();
+                    require(!table.lookup_current(name), location, "Duplicate enumerator or ordinary identifier: " + name);
+                    auto symbol = entry(SemanticSymbolKind::Enumerator, Type::scalar_type(S::Int), location);
+                    symbol->integer_constant = uint64_t(value) & UINT32_MAX;
+                    table.enter(table.depth() - 1, name, symbol);
+                    next_value = value + 1;
+                }
+                canonical->layout->size = canonical->layout->alignment = 4;
+            } else {
+                std::vector<Member> fields;
+                std::set<std::string> names;
+                size_t size = 0, align = 1;
+                for (const auto &declaration : definition.members) {
+                    require(declaration->storage.empty() && !declaration->is_typedef, declaration->location, "Struct members cannot have storage classes");
+                    require(!declaration->declarators.empty(), declaration->location, "Unsupported feature: anonymous struct member");
+                    for (const auto &field : declaration->declarators) {
+                        require(!field.initializer, field.location, "Struct members cannot have initializers");
+                        auto member_type = resolve(field.type, field.location);
+                        require(complete(member_type), field.location, "Struct member requires a complete object type; recursive objects and flexible arrays are unsupported");
+                        auto name = field.name.get_token();
+                        require(names.insert(name).second, field.location, "Duplicate struct member: " + name);
+                        auto member_align = alignment(member_type);
+                        size = aligned(size, member_align, field.location);
+                        fields.push_back({name, member_type, field.location, size});
+                        auto extent = ScalarDataModel::size_of(member_type);
+                        require(size <= SIZE_MAX - extent, field.location, "Struct layout exceeds the data model");
+                        size += extent;
+                        align = std::max(align, member_align);
+                        canonical->layout->const_member |= contains_const(member_type);
+                    }
+                }
+                require(!fields.empty(), where, "Empty structs are unsupported");
+                canonical->layout->size = aligned(size, align, where);
+                canonical->layout->alignment = align;
+                members[canonical->tag_identity] = std::move(fields);
+            }
+            canonical->layout->defining = false;
+            canonical->layout->complete = true;
             return canonical;
         }
         TypePtr resolve(const TypePtr &raw, const SourceLocation &where, const std::vector<Parameter> *parameters = nullptr) {
@@ -285,8 +387,14 @@ namespace mx {
                 if (raw->bound_expression) {
                     auto bound = infer(*raw->bound_expression);
                     require(integer(bound.type), raw->bound_expression->location, "Array bound requires integer type");
-                    if (!extent && bound.constant_expression && bound.integer_constant && (unsigned_type(bare(bound.type)->scalar) || signed_value(*bound.integer_constant, bound.type) >= 0) && *bound.integer_constant <= SIZE_MAX)
-                        extent = static_cast<size_t>(*bound.integer_constant);
+                    require(bound.constant_expression && bound.integer_constant.has_value(), raw->bound_expression->location, "Array bound requires an integer constant expression; variable length arrays are unsupported");
+                    require(*bound.integer_constant != 0 && (unsigned_type(bare(bound.type)->scalar) || signed_value(*bound.integer_constant, bound.type) > 0), raw->bound_expression->location, "Array bound must be positive");
+                    require(*bound.integer_constant <= SIZE_MAX, where, "Array bound exceeds the data model");
+                    extent = static_cast<size_t>(*bound.integer_constant);
+                }
+                if (extent) {
+                    require(*extent > 0, where, "Array bound must be positive");
+                    require(*extent <= SIZE_MAX / ScalarDataModel::size_of(element), where, "Array size exceeds the data model");
                 }
                 return Type::array(element, extent, raw->bound_expression);
             }
@@ -324,6 +432,7 @@ namespace mx {
             auto source = decay(value.type);
             bool valid = arithmetic(destination) && arithmetic(source);
             valid |= pointer(destination) && (value.null_pointer_constant || pointer_conversion(destination, source));
+            valid |= bare(destination)->kind == K::Tagged && bare(destination)->tag == TagKind::Struct && complete(destination) && compatible(destination, source, true);
             valid |= bare(destination)->kind == K::Scalar && bare(destination)->scalar == S::Bool && pointer(source);
             require(valid, where, "Incompatible assignment or conversion from " + value.type->to_string() + " to " + destination->to_string());
         }
@@ -553,6 +662,10 @@ namespace mx {
                 require(symbol && symbol->kind != SemanticSymbolKind::Typedef, SourceLocation::from_token(node->var), "Undeclared identifier: " + name);
                 result.type = symbol->type;
                 result.symbol = symbol;
+                if (symbol->kind == SemanticSymbolKind::Enumerator) {
+                    result.constant_expression = true;
+                    result.integer_constant = symbol->integer_constant;
+                }
                 result.lvalue = symbol->kind == SemanticSymbolKind::Object;
             } else if (auto node = dynamic_cast<const UnaryNode *>(&expression)) {
                 auto value = infer(*node->value);
@@ -616,6 +729,8 @@ namespace mx {
                 auto a = decay(left.type), b = decay(right.type);
                 if (arithmetic(a) && arithmetic(b))
                     result.type = ScalarDataModel::arithmetic_type(a, b);
+                else if (bare(a)->kind == K::Tagged && bare(a)->tag == TagKind::Struct && compatible(a, b, true))
+                    result.type = bare(a);
                 else if (void_type(a) && void_type(b))
                     result.type = Type::scalar_type(S::Void);
                 else if (pointer(a) && right.null_pointer_constant)
@@ -687,16 +802,22 @@ namespace mx {
                 result.lvalue = true;
             } else if (auto node = dynamic_cast<const MemberNode *>(&expression)) {
                 auto base = infer(*node->base);
-                auto type = node->op.get_token() == "->" ? decay(base.type) : bare(base.type);
+                auto type = node->op.get_token() == "->" ? decay(base.type) : base.type;
                 if (node->op.get_token() == "->") {
                     require(pointer(type), SourceLocation::from_token(node->op), "Arrow member access requires a pointer to a struct");
                     type = bare(type)->element;
                 }
                 require(bare(type)->kind == K::Tagged && bare(type)->tag == TagKind::Struct, SourceLocation::from_token(node->member), "Member access requires a struct type");
-                fail(SourceLocation::from_token(node->member), "Member access on incomplete struct; struct definitions are not implemented");
+                require(complete(type), SourceLocation::from_token(node->member), "Member access on incomplete struct");
+                const auto &fields = members.at(bare(type)->tag_identity);
+                auto field = std::find_if(fields.begin(), fields.end(), [&](const Member &member) { return member.name == node->member.get_token(); });
+                require(field != fields.end(), SourceLocation::from_token(node->member), "Struct has no member named " + node->member.get_token());
+                result.type = Type::qualified(field->type, type->top_qualifiers());
+                result.lvalue = node->op.get_token() == "->" || base.lvalue;
+                result.member_offset = field->offset;
             } else
                 fail(where, "Unsupported expression in semantic validation");
-            result.modifiable = result.lvalue && !result.type->top_qualifiers().is_const && bare(result.type)->kind != K::Array && complete(result.type);
+            result.modifiable = result.lvalue && !contains_const(result.type) && bare(result.type)->kind != K::Array && complete(result.type);
             result.null_pointer_constant |= integer(result.type) && result.constant_expression && result.integer_constant && *result.integer_constant == 0;
             facts[&expression] = result;
             return result;
@@ -745,8 +866,57 @@ namespace mx {
                 return_type = previous;
             }
         }
+        TypePtr initialize(TypePtr type, const ExprNode &expression, bool constant) {
+            auto t = bare(type);
+            auto list = dynamic_cast<const InitializerListNode *>(&expression);
+            if (t->kind == K::Array) {
+                const ExprNode *string = &expression;
+                if (list && list->elements.size() == 1)
+                    string = list->elements.front().get();
+                auto literal = dynamic_cast<const LiteralNode *>(string);
+                auto element = bare(t->element);
+                bool character = element->kind == K::Scalar && (element->scalar == S::Char || element->scalar == S::SignedChar || element->scalar == S::UnsignedChar);
+                if (character && literal && literal->value.get_type() == TOKEN_TYPE::STRING_VALUE) {
+                    auto value = infer(*literal);
+                    auto length = *bare(value.type)->bound;
+                    require(!t->bound || *t->bound >= length - 1, expression.location, "String initializer is too long for character array");
+                    return Type::qualified(Type::array(t->element, t->bound.value_or(length)), type->top_qualifiers());
+                }
+                require(list != nullptr, expression.location, "Array initializer requires positional braces; brace elision is unsupported");
+                require(!list->elements.empty(), expression.location, "Empty initializer is unsupported");
+                require(!t->bound || list->elements.size() <= *t->bound, expression.location, "Too many elements in array initializer");
+                for (const auto &value : list->elements)
+                    initialize(t->element, *value, constant);
+                auto result = Type::array(t->element, t->bound.value_or(list->elements.size()));
+                require(*result->bound <= SIZE_MAX / ScalarDataModel::size_of(t->element), expression.location, "Array size exceeds the data model");
+                return Type::qualified(result, type->top_qualifiers());
+            }
+            if (t->kind == K::Tagged && t->tag == TagKind::Struct) {
+                require(complete(type), expression.location, "Initializer requires a complete struct type");
+                require(list != nullptr, expression.location, "Unsupported feature: aggregate copy initializer; use positional braces");
+                const auto &fields = members.at(t->tag_identity);
+                require(list->elements.size() <= fields.size(), expression.location, "Too many elements in struct initializer");
+                for (size_t i = 0; i < list->elements.size(); ++i)
+                    initialize(fields[i].type, *list->elements[i], constant);
+                return type;
+            }
+            if (list) {
+                require(list->elements.size() == 1, expression.location, "Scalar initializer requires exactly one element");
+                require(!dynamic_cast<const InitializerListNode *>(list->elements.front().get()), expression.location, "Excess braces in scalar initializer");
+                return initialize(type, *list->elements.front(), constant);
+            }
+            auto value = infer(expression);
+            assignable(type, value, expression.location);
+            if (constant)
+                require(pointer(type) ? value.null_pointer_constant : value.constant_expression, expression.location, "File-scope initializer requires an arithmetic constant or null pointer; address constants are not implemented");
+            if (constant && integer(value.type))
+                require(value.integer_constant.has_value(), expression.location, "Invalid arithmetic in constant initializer");
+            return type;
+        }
         void declaration(const DeclarationNode &node) {
             bool internal = storage(node.storage, node.location, node.is_typedef);
+            if (bare(node.declared_type())->kind == K::Tagged && bare(node.declared_type())->definition)
+                resolve(node.declared_type(), node.location);
             if (node.declarators.empty()) {
                 require(bare(node.declared_type())->kind == K::Tagged && !node.is_typedef, node.location, "Declaration requires a declarator");
                 tag(node.declared_type(), node.location, true);
@@ -774,15 +944,19 @@ namespace mx {
                     continue;
                 }
                 require(!void_type(type) && bare(type)->kind != K::Function, declarator.location, "Object cannot have void or function type");
-                require(bare(type)->kind != K::Tagged, declarator.location, "Object has incomplete struct type");
+                require(complete(type) || (bare(type)->kind == K::Array && !bare(type)->bound && (bool(declarator.initializer) || (table.depth() == 1 && !node.storage.empty() && node.storage.front() == "extern"))), declarator.location, "Object has incomplete struct type or array extent");
                 if (previous) {
                     require(table.depth() == 1 && previous->kind == SemanticSymbolKind::Object && compatible(previous->type, type), declarator.location, "Duplicate or incompatible object declaration: " + name);
                     require(!declarator.initializer || !previous->defined, declarator.location, "Duplicate object definition: " + name);
                     bool is_extern = !node.storage.empty() && node.storage.front() == "extern";
                     require((!internal || previous->internal_linkage) && (!previous->internal_linkage || internal || is_extern), declarator.location, "Conflicting object linkage: " + name);
                     previous->defined |= bool(declarator.initializer);
-                    if (!bare(previous->type)->bound && bare(type)->bound && bare(type)->kind == K::Array)
-                        previous->type = type;
+                    if (bare(type)->kind == K::Array) {
+                        if (!bare(previous->type)->bound && bare(type)->bound)
+                            previous->type = type;
+                        if (!bare(type)->bound && bare(previous->type)->bound)
+                            type = previous->type;
+                    }
                 } else {
                     require(table.depth() != 1 || !external_functions.contains(name), declarator.location, "Object conflicts with external function: " + name);
                     auto symbol = entry(SemanticSymbolKind::Object, type, declarator.location);
@@ -791,10 +965,8 @@ namespace mx {
                     table.enter(table.depth() - 1, name, symbol);
                 }
                 if (declarator.initializer) {
-                    auto value = infer(*declarator.initializer);
-                    assignable(type, value, declarator.initializer->location);
-                    if (table.depth() == 1)
-                        require(pointer(type) ? value.null_pointer_constant : value.constant_expression, declarator.initializer->location, "File-scope initializer requires an arithmetic constant or null pointer; address constants are not implemented");
+                    type = initialize(type, *declarator.initializer, table.depth() == 1);
+                    table.lookup_current(name)->type = type;
                 }
             }
         }

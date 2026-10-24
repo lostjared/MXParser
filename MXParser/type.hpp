@@ -18,11 +18,19 @@ namespace mx {
         bool operator==(const TypeQualifiers &) const = default;
     };
 
+    struct AggregateDefinition;
+    struct TagLayout {
+        bool complete = false;
+        bool defining = false;
+        size_t size = 0;
+        size_t alignment = 1;
+        bool const_member = false;
+    };
     class Type;
     class ExprNode;
     using TypePtr = std::shared_ptr<const Type>;
 
-    /** Immutable, shared C type structure. Named types retain an optional typedef definition. */
+    /** Shared C type structure. Semantic tag layouts are completed during validation. */
     class Type {
       public:
         const TypeKind kind;
@@ -38,13 +46,15 @@ namespace mx {
         const bool has_prototype;
         /** Zero for syntax-only tags; resolved identities distinguish semantic scopes. */
         const size_t tag_identity;
+        const std::shared_ptr<const AggregateDefinition> definition;
+        const std::shared_ptr<TagLayout> layout;
 
         static TypePtr scalar_type(ScalarKind scalar);
         static TypePtr qualified(TypePtr base, TypeQualifiers qualifiers);
         static TypePtr pointer(TypePtr target);
         static TypePtr array(TypePtr element, std::optional<size_t> bound = std::nullopt, std::shared_ptr<const ExprNode> expression = {});
         static TypePtr function(TypePtr result, std::vector<TypePtr> parameters, bool has_prototype = true);
-        static TypePtr tagged(TagKind tag, std::string name, size_t identity = 0);
+        static TypePtr tagged(TagKind tag, std::string name, size_t identity = 0, std::shared_ptr<const AggregateDefinition> definition = {}, std::shared_ptr<TagLayout> layout = {});
         static TypePtr named(std::string name, TypePtr definition = {});
         /** Read the scalar/tag/typedef and pointer type-name syntax supported by the parser. */
         static TypePtr from_name(const std::string &spelling);
@@ -58,7 +68,7 @@ namespace mx {
         bool equals(const Type &other) const;
 
       private:
-        Type(TypeKind kind, ScalarKind scalar = ScalarKind::Int, TypePtr element = {}, TypeQualifiers qualifiers = {}, TagKind tag = TagKind::Struct, std::string name = {}, std::optional<size_t> bound = {}, std::vector<TypePtr> parameters = {}, std::string spelling = {}, std::shared_ptr<const ExprNode> expression = {}, bool has_prototype = true, size_t tag_identity = 0);
+        Type(TypeKind kind, ScalarKind scalar = ScalarKind::Int, TypePtr element = {}, TypeQualifiers qualifiers = {}, TagKind tag = TagKind::Struct, std::string name = {}, std::optional<size_t> bound = {}, std::vector<TypePtr> parameters = {}, std::string spelling = {}, std::shared_ptr<const ExprNode> expression = {}, bool has_prototype = true, size_t tag_identity = 0, std::shared_ptr<const AggregateDefinition> definition = {}, std::shared_ptr<TagLayout> layout = {});
         const std::string spelling;
         std::string render(std::string declarator, const Type *stop = nullptr) const;
     };

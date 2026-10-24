@@ -432,6 +432,8 @@ namespace mx {
         frames.back().scopes.pop_back();
     }
     void Evaluate::visit(DeclarationNode &node) {
+        if (node.declared_type()->unqualified().definition)
+            throw std::runtime_error("Evaluation does not support aggregate definitions");
         if (node.is_typedef)
             return;
         for (auto &declarator : node.declarators) {

@@ -2,6 +2,7 @@
 #include "MXParser/source.hpp"
 #include "MXParser/type.hpp"
 #include <MXLex/scanner.hpp>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <print>
@@ -13,13 +14,14 @@
 
 namespace mx {
 
-    enum class SemanticSymbolKind { Object, Function, Typedef, Tag };
+    enum class SemanticSymbolKind { Object, Function, Typedef, Tag, Enumerator };
     struct SemanticSymbol {
         SemanticSymbolKind kind;
         TypePtr type;
         SourceLocation location;
         bool defined = false;
         bool internal_linkage = false;
+        std::optional<uint64_t> integer_constant;
     };
 
     /** Typed lexical scopes with independent ordinary-identifier and tag namespaces. */

@@ -312,6 +312,12 @@ until the final optional step. Document support separately for each capability.
      the expected ASTs and invalid jump contexts are rejected.
 
 6. **Add basic aggregate declarations and initialization.**
+   Status: complete for parsing and validation. See the
+   [aggregate notes](docs/c-subset.md#aggregates-and-initialization) and
+   [examples/aggregates.c](examples/aggregates.c). CTest covers struct layout and
+   member access, enum constants, array bounds, initializer shape, and round trips.
+   Aggregate execution remains deferred to step 8.
+
    - Parse simple struct and enum definitions, tagged forward declarations,
      fixed-size arrays, scalar initializers, positional brace initializers,
      and character-array string initializers. Decode character/string escapes

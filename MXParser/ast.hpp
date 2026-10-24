@@ -17,6 +17,7 @@
 
 namespace mx {
 
+    class InitializerListNode;
     class NumberNode;
     class BinaryNode;
     class UnaryNode;
@@ -53,6 +54,7 @@ namespace mx {
         virtual void visit(UnaryNode &node) = 0;
         virtual void visit(AssignmentNode &node) = 0;
         virtual void visit(VariableNode &node) = 0;
+        virtual void visit(InitializerListNode &node);
         virtual void visit(LiteralNode &node);
         virtual void visit(ConditionalNode &node);
         virtual void visit(CallNode &node);
@@ -87,6 +89,13 @@ namespace mx {
     class ExprNode : public ASTNode {
       public:
         using ASTNode::ASTNode;
+    };
+
+    class InitializerListNode : public ExprNode {
+      public:
+        std::vector<std::unique_ptr<ExprNode>> elements;
+        void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
+        std::string to_string() const override;
     };
 
     class NumberNode : public ExprNode {
@@ -270,6 +279,18 @@ namespace mx {
         std::vector<Declarator> declarators;
         void accept(ASTVisitor &visitor) override { visitor.visit(*this); }
         std::string to_string() const override;
+    };
+
+    struct Enumerator {
+        Token name;
+        std::unique_ptr<ExprNode> value;
+    };
+
+    struct AggregateDefinition {
+        SourceLocation location;
+        std::vector<std::unique_ptr<DeclarationNode>> members;
+        std::vector<Enumerator> enumerators;
+        std::string to_string(TagKind kind) const;
     };
 
     class IfNode : public ASTNode {

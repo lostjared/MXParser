@@ -18,6 +18,32 @@ namespace mx {
 
     } // namespace
 
+    void ASTVisitor::visit(InitializerListNode &) { throw std::runtime_error("Visitor does not support brace initializers"); }
+    std::string InitializerListNode::to_string() const {
+        std::string result = "{";
+        for (const auto &element : elements) {
+            if (result.size() > 1)
+                result += ", ";
+            result += element->to_string();
+        }
+        return result + "}";
+    }
+    std::string AggregateDefinition::to_string(TagKind kind) const {
+        std::string result = "{";
+        if (kind == TagKind::Enum) {
+            for (size_t i = 0; i < enumerators.size(); ++i) {
+                if (i)
+                    result += ", ";
+                result += enumerators[i].name.get_token();
+                if (enumerators[i].value)
+                    result += "=" + enumerators[i].value->to_string();
+            }
+        } else {
+            for (const auto &member : members)
+                result += member->to_string();
+        }
+        return result + "}";
+    }
     void ASTVisitor::visit(ProgramNode &) { throw std::runtime_error("Visitor does not support programs"); }
     void ASTVisitor::visit(FunctionNode &) { throw std::runtime_error("Visitor does not support function definitions"); }
     void ASTVisitor::visit(BlockNode &) { throw std::runtime_error("Visitor does not support blocks"); }
@@ -148,6 +174,8 @@ namespace mx {
         stream << "ENDSCOPE\n";
     }
     void ICode::visit(DeclarationNode &node) {
+        if (node.declared_type()->unqualified().definition)
+            throw std::runtime_error("Code generation does not support aggregate definitions");
         if (node.is_typedef)
             return;
         for (auto &declarator : node.declarators) {

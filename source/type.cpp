@@ -83,7 +83,7 @@ namespace mx {
         }
     } // namespace
 
-    Type::Type(TypeKind kind, ScalarKind scalar, TypePtr element, TypeQualifiers qualifiers, TagKind tag, std::string name, std::optional<size_t> bound, std::vector<TypePtr> parameters, std::string spelling, std::shared_ptr<const ExprNode> expression, bool has_prototype, size_t tag_identity) : kind(kind), scalar(scalar), tag(tag), qualifiers(qualifiers), name(std::move(name)), element(std::move(element)), bound(bound), bound_expression(std::move(expression)), parameters(std::move(parameters)), has_prototype(has_prototype), tag_identity(tag_identity), spelling(std::move(spelling)) {}
+    Type::Type(TypeKind kind, ScalarKind scalar, TypePtr element, TypeQualifiers qualifiers, TagKind tag, std::string name, std::optional<size_t> bound, std::vector<TypePtr> parameters, std::string spelling, std::shared_ptr<const ExprNode> expression, bool has_prototype, size_t tag_identity, std::shared_ptr<const AggregateDefinition> definition, std::shared_ptr<TagLayout> layout) : kind(kind), scalar(scalar), tag(tag), qualifiers(qualifiers), name(std::move(name)), element(std::move(element)), bound(bound), bound_expression(std::move(expression)), parameters(std::move(parameters)), has_prototype(has_prototype), tag_identity(tag_identity), definition(std::move(definition)), layout(std::move(layout)), spelling(std::move(spelling)) {}
 
     TypePtr Type::scalar_type(ScalarKind scalar) { return TypePtr(new Type(TypeKind::Scalar, scalar)); }
     TypePtr Type::qualified(TypePtr base, TypeQualifiers qualifiers) {
@@ -113,10 +113,10 @@ namespace mx {
             require_type(parameter);
         return TypePtr(new Type(TypeKind::Function, ScalarKind::Int, std::move(result), {}, TagKind::Struct, {}, {}, std::move(parameters), {}, {}, has_prototype));
     }
-    TypePtr Type::tagged(TagKind tag, std::string name, size_t identity) {
-        if (!identifier(name))
+    TypePtr Type::tagged(TagKind tag, std::string name, size_t identity, std::shared_ptr<const AggregateDefinition> definition, std::shared_ptr<TagLayout> layout) {
+        if ((name.empty() && !definition && !identity) || (!name.empty() && !identifier(name)))
             throw std::invalid_argument("Expected type tag");
-        return TypePtr(new Type(TypeKind::Tagged, ScalarKind::Int, {}, {}, tag, std::move(name), {}, {}, {}, {}, true, identity));
+        return TypePtr(new Type(TypeKind::Tagged, ScalarKind::Int, {}, {}, tag, std::move(name), {}, {}, {}, {}, true, identity, std::move(definition), std::move(layout)));
     }
     TypePtr Type::named(std::string name, TypePtr definition) {
         if (!identifier(name))
@@ -148,7 +148,7 @@ namespace mx {
         case TypeKind::Array:
             return bound == other.bound && (bound || ((!bound_expression && !other.bound_expression) || (bound_expression && other.bound_expression && bound_expression->to_string() == other.bound_expression->to_string()))) && element->equals(*other.element);
         case TypeKind::Tagged:
-            return tag == other.tag && (tag_identity || other.tag_identity ? tag_identity == other.tag_identity : name == other.name);
+            return tag == other.tag && (tag_identity || other.tag_identity ? tag_identity == other.tag_identity : name == other.name && (!name.empty() || definition == other.definition));
         case TypeKind::Named:
             return name == other.name && ((!element && !other.element) || (element && other.element && element->equals(*other.element)));
         case TypeKind::Function:
@@ -201,6 +201,8 @@ namespace mx {
         if (stop)
             throw std::invalid_argument("Declarator base is not part of this type");
         std::string base = kind == TypeKind::Scalar ? scalar_name(scalar) : kind == TypeKind::Named ? name : (tag == TagKind::Struct ? "struct " : tag == TagKind::Union ? "union " : "enum ") + name;
+        if (kind == TypeKind::Tagged && definition)
+            base += definition->to_string(tag);
         return base + (declarator.empty() ? "" : " " + declarator);
     }
     std::string Type::to_string() const { return spelling.empty() ? render("") : spelling; }

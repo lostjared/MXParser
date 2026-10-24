@@ -129,6 +129,8 @@ namespace mx {
         std::vector<Parameter> parameter_list();
         TypePtr derive_type(TypePtr base, const ParsedDeclarator &declarator);
         std::unique_ptr<FunctionNode> function_node(const Declarator &declarator, const std::vector<std::string> &storage, SourceLocation location);
+        std::unique_ptr<ExprNode> initializer();
+        size_t member_depth = 0;
         TypePtr type_name();
         std::unique_ptr<ProgramNode> program();
         std::unique_ptr<BlockNode> block(bool new_scope = true);

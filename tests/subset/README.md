@@ -22,7 +22,7 @@ features also parse today and must be rejected by the future validated subset.
 Parsing acceptance records syntax only. Step 3 also verifies independent types
 for `mixed-declarators.c` and scoped typedef behavior in the `declarators` suite.
 Array-bound fixtures may parse before their constraints can be checked; constant
-expression and positive-bound validation remain work for step 6.
+expression and positive-bound validation are checked from step 6 onward.
 
 Run all baseline checks from the repository root:
 
@@ -35,7 +35,7 @@ ctest --test-dir build/cmake --output-on-failure
 Run only fixture checks with `ctest --test-dir build/cmake -R subset-fixtures
 --output-on-failure`. This checks current syntax expectations and parser
 diagnostics with source locations and token columns when available. For inputs
-owned by steps 1–5 that parse successfully, it also checks `target_validation`
+owned by steps 1–6 that parse successfully, it also checks `target_validation`
 using the independent semantic analyzer. No source code executes. Later acceptance expectations are
 data for upcoming milestones, not expected-failure tests. When implementing a
 feature, update its baseline and add AST or semantic assertions to verify the
@@ -46,3 +46,10 @@ Step 5 updates `target_parse` for invalid loop/switch jump and label contexts to
 match the parser's early context diagnostics. Their `target_validation` remains
 `reject`; the statement suite also checks semantic contexts using constructed
 ASTs. Duplicate cases/defaults remain syntax acceptances with semantic rejections.
+
+Step 6 adds aggregate, enum, bound, and initializer validation. The `aggregates`
+suite also checks layout/member facts and parse/print stability. Flexible-array
+members, brace elision, and aggregate copy initializers now have
+`target_parse=accept` and `target_validation=reject`: these exclusions require
+semantic type/shape information. Their validated acceptance has not changed.
+`combined.c` now parses as well; its broader publication checks remain step 7.

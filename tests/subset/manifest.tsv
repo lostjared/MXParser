@@ -11,9 +11,9 @@ fixtures/array-parameter.c	3	accept	accept	accept	-
 fixtures/typedef-scope.c	3	accept	accept	accept	-
 fixtures/storage.c	3	accept	accept	accept	-
 fixtures/structured-statements.c	5	accept	accept	accept	-
-fixtures/aggregates.c	6	reject	accept	accept	-
-fixtures/initializers.c	6	reject	accept	accept	-
-fixtures/combined.c	7	reject	accept	accept	-
+fixtures/aggregates.c	6	accept	accept	accept	-
+fixtures/initializers.c	6	accept	accept	accept	-
+fixtures/combined.c	7	accept	accept	accept	-
 fixtures/missing-semicolon.c	2	reject	reject	reject	expected semicolon with offending token and line
 fixtures/unexpected-eof.c	2	reject	reject	reject	expected closing brace at end of input with line
 fixtures/bad-type.c	2	reject	reject	reject	invalid combination of type specifiers
@@ -35,12 +35,12 @@ fixtures/bad-case.c	5	reject	reject	reject	case requires an enclosing switch
 fixtures/duplicate-case.c	5	accept	accept	reject	duplicate case value after conversion
 fixtures/duplicate-default.c	5	accept	accept	reject	multiple defaults in one switch
 fixtures/switch-continue.c	5	reject	reject	reject	continue in a switch still requires an enclosing loop
-fixtures/unknown-member.c	6	reject	accept	reject	struct has no member named missing
+fixtures/unknown-member.c	6	accept	accept	reject	struct has no member named missing
 fixtures/incomplete-object.c	6	accept	accept	reject	object has incomplete struct type
-fixtures/recursive-object.c	6	reject	accept	reject	struct cannot contain itself by value
+fixtures/recursive-object.c	6	accept	accept	reject	struct cannot contain itself by value
 fixtures/bad-bound.c	6	accept	accept	reject	array bound must be positive
 fixtures/nonconstant-bound.c	6	accept	accept	reject	variable length arrays are unsupported
-fixtures/bad-initializer.c	6	reject	accept	reject	too many elements in array initializer
+fixtures/bad-initializer.c	6	accept	accept	reject	too many elements in array initializer
 fixtures/excluded-union.c	7	reject	reject	reject	unsupported feature: union
 fixtures/excluded-bit-field.c	7	reject	reject	reject	unsupported feature: bit field
 fixtures/excluded-function-pointer.c	7	reject	reject	reject	unsupported feature: function pointer
@@ -55,12 +55,12 @@ fixtures/excluded-generic.c	7	reject	reject	reject	unsupported feature: generic
 fixtures/excluded-static-local.c	7	reject	reject	reject	unsupported feature: static local
 fixtures/excluded-inline.c	7	accept	reject	reject	unsupported feature: inline
 fixtures/excluded-old-style.c	7	reject	reject	reject	unsupported feature: old style
-fixtures/excluded-flexible-array.c	7	reject	reject	reject	unsupported feature: flexible array
+fixtures/excluded-flexible-array.c	7	accept	accept	reject	unsupported feature: flexible array
 fixtures/excluded-wide-literal.c	7	accept	reject	reject	unsupported feature: wide literal
-fixtures/excluded-brace-elision.c	7	reject	reject	reject	unsupported feature: brace elision
+fixtures/excluded-brace-elision.c	7	accept	accept	reject	unsupported feature: brace elision
 fixtures/excluded-auto.c	7	reject	reject	reject	unsupported feature: auto
 fixtures/excluded-register.c	7	reject	reject	reject	unsupported feature: register
 fixtures/excluded-extern-local.c	7	reject	reject	reject	unsupported feature: extern local
 fixtures/excluded-enum-forward.c	7	reject	reject	reject	unsupported feature: enum forward
 fixtures/excluded-address-initializer.c	7	accept	reject	reject	unsupported feature: address initializer
-fixtures/excluded-aggregate-copy-initializer.c	7	reject	reject	reject	unsupported feature: aggregate copy initializer
+fixtures/excluded-aggregate-copy-initializer.c	7	accept	accept	reject	unsupported feature: aggregate copy initializer

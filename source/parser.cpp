@@ -442,13 +442,52 @@ namespace mx {
                 last_specifier = top();
                 append();
             } else if (!have_type && (word == "struct" || word == "union" || word == "enum")) {
-                append();
-                if (top().get_type() != TOKEN_TYPE::IDENTIFIER || keyword(top().get_token()))
-                    fail("Expected type tag");
-                append();
+                auto location = SourceLocation::from_token(top());
+                advance();
+                std::string name;
+                if (top().get_type() == TOKEN_TYPE::IDENTIFIER && !keyword(top().get_token())) {
+                    name = top().get_token();
+                    advance();
+                }
+                auto kind = word == "struct" ? TagKind::Struct : word == "union" ? TagKind::Union : TagKind::Enum;
+                std::shared_ptr<AggregateDefinition> definition;
+                if (match("{")) {
+                    if (kind == TagKind::Union)
+                        fail("Unsupported feature: union");
+                    definition = std::make_shared<AggregateDefinition>();
+                    definition->location = location;
+                    if (top().get_token() == "}")
+                        fail("Empty aggregate definitions are unsupported");
+                    if (kind == TagKind::Enum) {
+                        for (;;) {
+                            Enumerator enumerator;
+                            enumerator.name = identifier();
+                            if (match("="))
+                                enumerator.value = conditional();
+                            bind_name(enumerator.name);
+                            definition->enumerators.push_back(std::move(enumerator));
+                            if (!match(",") || top().get_token() == "}")
+                                break;
+                        }
+                        expect("}");
+                    } else {
+                        DepthGuard members(member_depth);
+                        while (!match("}")) {
+                            if (top().get_type() == TOKEN_TYPE::TOKEN_NULL)
+                                fail("Expected '}' in struct definition");
+                            auto member = declaration(false);
+                            auto field = dynamic_cast<DeclarationNode *>(member.get());
+                            if (!field)
+                                fail("Expected member declaration");
+                            definition->members.emplace_back(static_cast<DeclarationNode *>(member.release()));
+                        }
+                    }
+                } else if (name.empty())
+                    fail("Expected type tag or aggregate definition");
+                if (kind == TagKind::Enum && !definition && top().get_token() == ";")
+                    fail("Unsupported feature: enum forward declaration");
                 have_type = true;
-                // A tagged type is a complete specifier sequence, not scalar keywords.
-                named_type = Type::from_name(spelling);
+                named_type = Type::tagged(kind, name, 0, definition);
             } else if (!have_type && is_type_name(word)) {
                 named_type = Type::named(word, lookup_type(word));
                 have_type = true;
@@ -748,7 +787,7 @@ namespace mx {
             auto node = declaration(true);
             auto group = dynamic_cast<DeclarationNode *>(node.get());
             bool functions = false;
-            if (group && !group->is_typedef)
+            if (group && !group->is_typedef && !group->declared_type()->unqualified().definition)
                 for (const auto &declarator : group->declarators)
                     functions |= declarator.type->unqualified().kind == TypeKind::Function;
             if (!functions)
@@ -784,7 +823,7 @@ namespace mx {
         result->type_name = specifiers.type->to_string();
         result->is_typedef = specifiers.is_typedef;
         result->storage = specifiers.storage;
-        if (top().get_token() == ";" && !specifiers.is_typedef && specifiers.type->unqualified().kind == TypeKind::Tagged && specifiers.type->unqualified().tag == TagKind::Struct) {
+        if (top().get_token() == ";" && !specifiers.is_typedef && specifiers.type->unqualified().kind == TypeKind::Tagged && (specifiers.type->unqualified().tag == TagKind::Struct || specifiers.type->unqualified().definition)) {
             advance();
             return result;
         }
@@ -796,10 +835,13 @@ namespace mx {
             declarator.type = derive_type(specifiers.type, parsed);
             if (!parsed.modifiers.empty() && parsed.modifiers.front().kind == TypeKind::Function)
                 declarator.parameters = parsed.modifiers.front().parameters;
-            bind_name(declarator.name, specifiers.is_typedef ? declarator.type : TypePtr{});
+            if (!member_depth)
+                bind_name(declarator.name, specifiers.is_typedef ? declarator.type : TypePtr{});
+            if (top().get_token() == ":")
+                fail("Unsupported feature: bit field");
             if (top().get_token() == "{") {
                 if (!file_scope || specifiers.is_typedef || !result->declarators.empty() || declarator.type->unqualified().kind != TypeKind::Function || parsed.modifiers.empty() || parsed.modifiers.front().kind != TypeKind::Function)
-                    fail("Expected a standalone function definition; aggregate initializers are not implemented");
+                    fail("Expected a standalone function definition");
                 auto function = function_node(declarator, specifiers.storage, specifiers.location);
                 ScopeGuard scope(*this);
                 for (const auto &parameter : function->parameters) {
@@ -815,13 +857,32 @@ namespace mx {
                     fail("A typedef cannot have an initializer");
                 if (declarator.type->unqualified().kind == TypeKind::Function)
                     fail("A function cannot have an initializer");
-                declarator.initializer = assignment_expr();
+                declarator.initializer = initializer();
             }
             result->declarators.push_back(std::move(declarator));
             if (!match(","))
                 break;
         }
         expect(";");
+        return result;
+    }
+
+    std::unique_ptr<ExprNode> Parser::initializer() {
+        if (top().get_token() != "{")
+            return assignment_expr();
+        auto result = std::make_unique<InitializerListNode>();
+        result->location = SourceLocation::from_token(top());
+        advance();
+        if (top().get_token() == "}")
+            fail("Empty initializers are unsupported in C99");
+        for (;;) {
+            if (top().get_token() == "." || top().get_token() == "[")
+                fail("Unsupported feature: designated initializer");
+            result->elements.push_back(initializer());
+            if (!match(",") || top().get_token() == "}")
+                break;
+        }
+        expect("}");
         return result;
     }
 

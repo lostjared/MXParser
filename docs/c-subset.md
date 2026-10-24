@@ -8,24 +8,24 @@ The [fixture manifest](../tests/subset/manifest.tsv) maps examples to milestones
 
 "Partial" means the restrictions below matter. `SemanticAnalyzer` now provides
 an independent validation pass for the implemented grammar, including code that
-never executes. The target validation column still includes upcoming aggregate
-and statement features. Execution support remains the numeric interpreter subset.
+never executes. Steps 1–6 implement the grammar and validation described below; step 7 audits
+the published subset. Execution support remains the numeric interpreter subset.
 
 | Feature | Current parsing | Current validation / execution | Target parsing / validation | Step | Acceptance fixtures |
 | --- | --- | --- | --- | --- | --- |
 | Arithmetic, assignments, calls, comma, `?:`, casts | Yes | Static operand/lvalue/conversion checks; numeric execution | Implemented for current types | 2, 4 | `expressions`, `invalid-lvalue`, `bad-operands` |
-| Integer, floating, character, adjacent string literals | Yes | Numeric only | Yes / typed, decoded literals | 2, 6 | `literals`, `scalars` |
+| Integer, floating, character, adjacent string literals | Yes | Typed numeric facts and decoded narrow literals; numeric execution | Yes / typed, decoded literals | 2, 6 | `literals`, `scalars` |
 | Scalar types and qualifiers | Structured scalar/qualified types | LP64 validation and qualifier checks; interpreter still uses signed 64-bit storage/double arithmetic | Implemented for current types | 2, 4 | `scalars`, `bad-type`, `const-write`, `bad-restrict` |
 | Numeric globals, locals, multiple declarators, block scopes | Yes; independent derived types | Static lexical resolution and redeclaration checks; numeric execution | Implemented | 3, 4 | `numeric-program`, `mixed-declarators`, `duplicate-local` |
 | Prototypes, definitions, typed parameters, recursion, void | Yes | Static compatibility, arity, argument and return checks; direct numeric calls execute | Implemented for typed prototypes | 3, 4 | `numeric-program`, `prototype-conflict`, `bad-call`, `bad-return` |
 | Scoped typedefs and ordinary-name shadowing | Yes; expression API can also register type names | Numeric aliases execute; parser tracks declaration visibility | Yes / scoped typedef disambiguation implemented | 3 | `typedef-scope`, `bad-typedef` |
-| Pointers, arrays, parenthesized and abstract declarators | Yes within the chosen restrictions; array parameters adjust to pointers | No pointer/array execution; bounds await semantic validation | Yes / bound and complete-type checks | 3, 6 | `declarators`, `abstract-types`, `array-parameter`, `bad-declarator` |
-| `sizeof`, address/dereference, `.`, `->`, subscripting | Yes | Static pointer/complete-type checks; member access diagnoses incomplete structs until definitions land | Member definitions/layout remain for step 6; no execution | 4, 6 | `expressions`, `abstract-types`, `aggregates`, `unknown-member` |
+| Pointers, arrays, parenthesized and abstract declarators | Yes within the chosen restrictions; array parameters adjust to pointers | No pointer/array execution; constant positive bounds validated | Yes / bound and complete-type checks | 3, 6 | `declarators`, `abstract-types`, `array-parameter`, `bad-declarator` |
+| `sizeof`, address/dereference, `.`, `->`, subscripting | Yes | Static pointer/complete-type checks, member lookup, and LP64 layout | Yes / validated member access; no execution | 4, 6 | `expressions`, `abstract-types`, `aggregates`, `unknown-member` |
 | Blocks, empty statements, `if`/`else`, `while`, `for`, jumps | Yes | Static scalar-condition and jump-context checks; numeric execution | Implemented for existing statements | 4, 5 | `numeric-program`, `dangling-else`, `bad-break`, `bad-continue` |
 | `do`/`while`, `switch`, `case`, `default`, fallthrough | Yes; label order and nesting preserved | Static condition, constant-case, duplicate/default and context checks; execution/ICode deferred | Implemented for existing integer types | 5 | `structured-statements`, `bad-case`, `duplicate-case`, `duplicate-default`, `switch-continue` |
-| Struct definitions and forward declarations | References and forward declarations | Separate scoped tags, identity and incomplete-type checks; no layout/member definitions | Definitions/member lookup remain for step 6 | 4, 6 | `aggregates`, `incomplete-object`, `recursive-object` |
-| Enum definitions and integer constant expressions | Tag references only | No enum/bound validation | Yes / constant values and positive array bounds | 6 | `aggregates`, `bad-bound`, `nonconstant-bound` |
-| Scalar, positional brace, and character-array string initializers | Scalar expressions only | Numeric only | Yes / type, shape, and bounds checking | 6 | `initializers`, `bad-initializer` |
+| Struct definitions and forward declarations | Named/anonymous definitions and tagged forward declarations | Separate scoped tags, layout, completeness, and members; no execution | Yes / recursive objects rejected | 4, 6 | `aggregates`, `incomplete-object`, `recursive-object` |
+| Enum definitions and integer constant expressions | Named/anonymous definitions and tag references | Enum values, integer constant expressions, and positive bounds; no execution | Yes / constant values and positive array bounds | 6 | `aggregates`, `bad-bound`, `nonconstant-bound` |
+| Scalar, positional brace, and character-array string initializers | Yes, with explicit aggregate braces | Recursive shape/type checks, inferred extents, narrow escapes; numeric execution only | Yes / type, shape, and bounds checking | 6 | `initializers`, `bad-initializer` |
 | File-scope `static` and `extern` | Preserved in AST and printing | Static storage/linkage conflict checks and compatible repeated declarations | Implemented within one translation unit; no linking | 3, 4 | `storage`, `bad-storage` |
 | AST source locations and useful diagnostics | AST start locations and parser exception locations | Line, column when available, offending token, expected syntax; lexer reason retained | Implemented for current grammar | 2 | `missing-semicolon`, `unexpected-eof` |
 | Combined translation unit and AST round trip | Numeric subset | Numeric execution | Yes / all included features together | 7 | `combined` |
@@ -65,8 +65,9 @@ assertions about today's exact exception text.
   pointers to arrays, arrays of pointers, and functions returning object pointers.
   Reject function pointers, functions returning arrays/functions, arrays of
   functions, and arrays with variable length. Fixed bounds must be positive
-  integer constant expressions. Allow omitted bounds only when an initializer
-  determines the size, or in an array parameter adjusted to a pointer.
+  integer constant expressions. Allow omitted bounds when an initializer
+  determines the size, in an array parameter adjusted to a pointer, or in a
+  file-scope `extern` array declaration completed by another declaration.
 - Functions have typed prototypes and non-variadic parameter lists; definitions
   require named parameters. Use `(void)` for zero parameters. Keep existing
   empty `()` parsing for compatibility, but unprototyped function declarations
@@ -193,7 +194,7 @@ definition; it cannot be a bare scalar or typedef alias use.
 Run the existing CMake/CTest commands in the README. The `subset-fixtures` test
 reads every manifest entry and checks current syntax behavior through
 `parse_program()` without evaluation or output files. Successfully parsed inputs
-owned by steps 1–5 also check the manifest's semantic expectation through
+owned by steps 1–6 also check the manifest's semantic expectation through
 `SemanticAnalyzer`. A semantic rejection can therefore be a syntax acceptance.
 Parse errors must produce a
 nonempty `ParserException` with a line, token, and column when available; exact wording is not frozen. Other exceptions fail
@@ -215,7 +216,7 @@ currently be interpreted.
 ## Structured types and source locations
 
 Roadmap step 2 is implemented for the existing grammar. `mx::TypePtr` is a shared
-pointer to an immutable `mx::Type`. Inspect `kind` before reading the corresponding
+pointer to a `mx::Type` with immutable syntax fields and shared semantic tag layout state. Inspect `kind` before reading the corresponding
 fields: `scalar` for scalar types; `qualifiers` and `element` for qualified types;
 `element` for a pointer target or array element; and `element` plus `parameters`
 for a function result and parameter types. `has_prototype` distinguishes typed
@@ -320,8 +321,8 @@ compatibility and name/type validation. Expression-only callers can still use `a
 Function-pointer declarations, function-pointer parameters (including implicit
 adjustment from function parameters), and variadic lists report explicit
 unsupported-feature errors. Arrays of functions and functions returning arrays
-or functions are rejected. Aggregate definitions and brace initializers remain
-for step 6. Numeric aliases execute in the existing interpreter; typedef
+or functions are rejected. Aggregate definitions and brace initializers are described in the
+[step 6 notes](#aggregates-and-initialization). Numeric aliases execute in the existing interpreter; typedef
 declarations create no runtime objects. Pointer and array execution, and block
 function-prototype execution, remain unsupported. No C integer-width, linkage,
 or full compatibility semantics are implied by this parser milestone.
@@ -388,11 +389,11 @@ types; and loop jumps. Pointer conversions allow object/void pointers and null
 pointer constants, preserve pointed-to qualifiers, and reject unsafe nested
 qualification changes such as `int **` to `const int **`. Pointer arithmetic needs
 a complete target type. Function pointers, unsupported storage/type specifiers,
-and member access on currently incomplete structs fail explicitly.
+and member access on incomplete structs fail explicitly.
 
 `ScalarDataModel` defines the LP64 sizes specified above, integer promotions,
 usual arithmetic conversions, signedness, and floating ranks. It can report sizes
-of scalars, pointers, and arrays with known literal bounds. The validator types
+of scalars, pointers, complete structs/enums, and arrays with known bounds. The validator types
 integer literals using their base, suffix, rank, and representable range; checks
 floating literal range; types narrow character literals as `int`; and gives
 narrow adjacent strings a character-array type including one trailing null.
@@ -414,14 +415,10 @@ expression facts retain local-symbol references after local scopes close.
 The interpreter has not adopted this LP64 arithmetic model: it still uses signed
 64-bit integer storage and double arithmetic as documented above. Static type
 approval therefore does not promise C-equivalent evaluation or pointer execution.
-Bounds' positivity and full integer-constant evaluation, excluded variable-length
-arrays, enum constants, aggregate definitions/layout/member lookup, and brace
-initializers remain for step 6. Member checks currently diagnose invalid or
-incomplete bases rather than resolving fields. `sizeof` validates unevaluated
-operand types; its numeric fact is available only when the current model knows
-the size. This pass does not prove initialization, all-path returns, reachability,
-runtime bounds, alias safety, or termination. Steps 5–6 extend it alongside their
-new AST nodes and grammar. Step 5's structured statements are described below.
+Step 6 extends this pass with aggregates, initialization, and constant positive
+bounds as described below. `sizeof` validates unevaluated operand types and
+reports complete aggregate sizes. This pass does not prove initialization,
+all-path returns, reachability, runtime bounds, alias safety, or termination.
 
 ## Structured statements
 
@@ -459,8 +456,8 @@ conditional, and known-size `sizeof` facts. Supported constant array-bound
 arithmetic is also folded into resolved type extents so that, for example,
 `case sizeof(int[1+2]):` can be checked. Parser AST bounds remain unchanged.
 Calls, ordinary variable values, assignments, comma expressions, and invalid
-constant arithmetic do not supply case constants. Enum constants and the full
-bound/constant-expression work remain for step 6.
+constant arithmetic do not supply case constants. Step 6 also supplies prior enum
+constants and validated constant array bounds to the same case-folding machinery.
 
 New visitor overloads have throwing defaults, preserving source compatibility
 for existing visitors. The evaluator, intermediate-code generator, and HTML
@@ -472,3 +469,71 @@ and evaluator recovery, rather than claiming runtime fallthrough support.
 ./build/cmake/parse-expr --syntax-program examples/statements.c
 ./build/cmake/parse-expr --check-program examples/statements.c
 ```
+
+## Aggregates and initialization
+
+Step 6 adds named and anonymous struct/enum definitions, scoped struct forward
+references, complete fixed arrays, and positional initialization. Use
+`parse-expr --check-program examples/aggregates.c` to validate the combined
+example without executing it.
+
+Syntax tags carry an optional `Type::definition`, an `AggregateDefinition`
+containing member `DeclarationNode`s or `Enumerator`s. Enumerators retain their
+name token and optional value expression. Every member declarator and initializer
+has a source location. `InitializerListNode` is an initializer-only expression
+container whose ordered `elements` retain explicit nested braces; it cannot be
+used as an ordinary expression. Its visitor overload has a throwing default so
+existing visitors remain source compatible. Type/declaration printers retain
+definitions and initializer nesting, including grouped object/function prototypes.
+
+Validation creates canonical tag identities and a shared `Type::layout` for each
+resolved tag. Forward references observe completion of that same layout; parser
+syntax types remain unchanged. Layout state is completed by the analyzer, with
+`complete`, `size`, `alignment`, and `const_member` available on resolved types.
+Members use natural alignment capped at eight bytes, with padding before members
+and at the end of structs. Enum objects use signed 32-bit `int` representation;
+enumerators have type `int` and must fit its range. `ScalarDataModel::size_of`
+works on complete resolved aggregates, and member expression facts include
+`member_offset` relative to the immediate struct base. No host compiler ABI is
+inferred; these are the subset's fixed LP64 rules.
+
+Tags and ordinary identifiers have separate scopes; member names have their own
+namespace and do not hide typedefs. Validation rejects duplicate members/tags,
+unknown members, incomplete objects, by-value recursion, flexible arrays, and
+function/void members. Pointer self-references are valid. `.` and `->` preserve
+member qualifiers and lvalue categories. A struct containing const subobjects
+cannot be assigned as a whole; its other writable members remain assignable.
+Compatible struct assignment, conditional expressions, value parameters, and
+returns are type checked, while aggregate copy initialization remains excluded.
+
+Prior enumerators, integer/character constants, integer casts, `sizeof` complete
+types, and supported operators supply integer constant facts for enum values,
+array bounds, and cases. Division by zero, signed overflow, invalid shifts,
+variable references, calls, and comma/assignment/increment expressions cannot
+supply a required constant value. Short-circuit and conditional folding permits
+unevaluated invalid arithmetic where C permits it, while still checking types and
+names in all branches. Narrow standard, octal, and hexadecimal escapes are
+decoded for character constants and concatenated string lengths. Wide/UTF literals
+and universal escapes remain excluded.
+
+Explicit array bounds must be positive integer constants and object sizes must
+fit the model. Initializers recursively check scalar conversions and positional
+array/struct shape, reject excess elements, and allow trailing commas and omitted
+elements (implicit zero initialization under C rules). Omitted outer array bounds
+are inferred from initializer counts or decoded character strings. A string's
+trailing null may be omitted when an explicit character-array extent exactly
+matches its contents. One pair of braces is accepted around scalar expressions or
+character strings. Scalar initializer expressions retain normal local declaration
+visibility; file-scope elements require arithmetic constants or null pointers.
+Completed inferred types are available from semantic symbols; AST bounds are not
+rewritten.
+
+The `aggregates` CTest suite checks syntax/validation, source locations, layout
+and expression facts, parse/print/parse stability, analyzer reuse, malformed input,
+and explicit unsupported initializer visitor errors. The fixture runner now checks
+all step 1–6 semantic expectations. Flexible-array declarations, brace elision,
+and aggregate copy initializers are parsed as syntax and rejected by validation;
+their manifest entries retain semantic rejection. Designators, unions, bit-fields,
+and enum forward declarations retain explicit parser rejections. The evaluator
+and code generators report aggregate definitions/brace initialization as unsupported;
+aggregate storage, zero filling, and execution remain step 8 work.

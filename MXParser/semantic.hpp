@@ -27,6 +27,7 @@ namespace mx {
         bool constant_expression = false;
         std::optional<uint64_t> integer_constant;
         bool null_pointer_constant = false;
+        std::optional<size_t> member_offset;
         std::shared_ptr<const SemanticSymbol> symbol;
     };
 
