@@ -245,7 +245,8 @@ model and exclusions.
 | Scalar, positional brace, string-array initializers | Yes | Type, shape, extents, and constant requirements | Yes, including omitted-element zero filling |
 | Blocks, `if`, `while`, `for`, return and loop jumps | Yes | Conditions and jump contexts | Yes |
 | `do`/`while`, `switch`, `case`, `default` | Yes | Conditions, constants, duplicate labels, contexts | Yes, including fallthrough and loop jumps |
-| Preprocessing, unions, bit-fields, VLA, function pointers, variadics, designated initializers, `goto` | Outside subset | Rejected with diagnostics | Unsupported |
+| Built-in `lprintf` | Direct calls without a declaration | Format pointer and scalar/pointer arguments | Formatted application stdout |
+| Preprocessing, unions, bit-fields, VLA, function pointers, user-defined variadics, designated initializers, `goto` | Outside subset | Rejected with diagnostics | Unsupported |
 
 CTest checks the final fixture contract, AST structure and printing, source
 locations, malformed/EOF input, and visitor compatibility. When `cc`, `gcc`, or
@@ -290,7 +291,8 @@ one-past address). This is typed object storage, not a byte-addressable host
 process: incompatible representation casts and character-byte aliasing into
 other object types, and casts that recover enclosing objects from member bounds,
 are unsupported. External libraries, allocation functions,
-and linker support remain outside the subset. No complete undefined-behavior or
+and linker support remain outside the subset; `lprintf` is the built-in stdout
+exception. No complete undefined-behavior or
 unsequenced-access detection is promised.
 
 `ExecutionLimits` defaults to one million instructions per call/load, 256 call
@@ -306,6 +308,41 @@ storage/result conventions differ. Generated binaries and C files stay in the
 build tree. Legacy expression mode and `Evaluate` retain their previous behavior;
 ICode/HTML remain illustrative numeric output with explicit object-operation
 errors, rather than a backend for the interpreter.
+
+## Built-in formatted output
+
+`lprintf` writes printf-style formatted output to the application's stdout and
+returns the number of bytes written, or a negative value on an output failure.
+It is available automatically in the validated interpreter: no header or
+prototype is needed.
+
+```c
+int main(void) {
+    lprintf("Hello, %s! count=%d, average=%.2f\n", "world", 3, 2.5);
+    return 0;
+}
+```
+
+```bash
+./build/parse-expr --run-program examples/lprintf.c
+```
+
+Supported conversions are `%d`, `%i`, `%u`, `%o`, `%x`, `%X`, `%f`, `%F`, `%e`,
+`%E`, `%g`, `%G`, `%a`, `%A`, `%c`, `%s`, `%p`, `%n`, and `%%`, with standard
+flags, width/precision (including `*`), and applicable `hh`, `h`, `l`, `ll`, `j`,
+`z`, `t`, and `L` modifiers. Arguments receive C default promotions. `%n` stores
+its byte count through a correctly typed writable integer pointer. `%p` prints
+an interpreter virtual address rather than a host-process address.
+
+The format can be a string literal or a runtime character array/pointer. Missing
+arguments, incompatible argument types, invalid strings/pointers, and unsupported
+formats report execution errors. Wide `%lc`/`%ls`, POSIX positional arguments,
+and nonstandard format extensions are outside this subset. The
+`ExecutionLimits::output_bytes` budget defaults to one MiB per call and bounds
+format/string scanning, field sizes, and generated output. `lprintf` is a reserved
+built-in function name and cannot be declared or defined by source programs;
+ordinary local objects may shadow it under normal name lookup. This extension is
+available through `Interpreter`/`--run-program`; legacy `Evaluate` is unchanged.
 
 ## Roadmap: basic C language subset
 

@@ -228,6 +228,14 @@ namespace mx {
         };
         std::vector<SwitchContext> switches;
         TypePtr return_type;
+        Implementation() {
+            auto character = Type::qualified(Type::scalar_type(S::Char), {.is_const = true});
+            auto signature = Type::function(Type::scalar_type(S::Int), {Type::pointer(character)});
+            auto symbol = entry(SemanticSymbolKind::Function, signature, {});
+            symbol->builtin = true;
+            table.enter(0, "lprintf", symbol);
+            external_functions["lprintf"] = symbol;
+        }
         struct Scope {
             SemanticSymbolTable &table;
             Scope(SemanticSymbolTable &table) : table(table) { table.push_scope(); }
@@ -787,9 +795,18 @@ namespace mx {
                 require(dynamic_cast<const VariableNode *>(node->callee.get()) != nullptr, where, "Only direct calls to declared functions are supported");
                 auto signature = bare(callee.type);
                 require(signature->kind == K::Function && signature->has_prototype, where, "Call requires a visible typed function prototype");
-                require(signature->parameters.size() == node->arguments.size(), where, "Function call argument count does not match prototype");
-                for (size_t i = 0; i < node->arguments.size(); ++i)
-                    assignable(signature->parameters[i], infer(*node->arguments[i]), node->arguments[i]->location);
+                if (callee.symbol && callee.symbol->builtin) {
+                    require(!node->arguments.empty(), where, "lprintf requires a format string");
+                    assignable(signature->parameters.front(), infer(*node->arguments.front()), node->arguments.front()->location);
+                    for (size_t i = 1; i < node->arguments.size(); ++i) {
+                        auto argument = decay(infer(*node->arguments[i]).type);
+                        require(scalar(argument), node->arguments[i]->location, "lprintf arguments must be scalar values or object pointers");
+                    }
+                } else {
+                    require(signature->parameters.size() == node->arguments.size(), where, "Function call argument count does not match prototype");
+                    for (size_t i = 0; i < node->arguments.size(); ++i)
+                        assignable(signature->parameters[i], infer(*node->arguments[i]), node->arguments[i]->location);
+                }
                 result.type = bare(signature->element);
             } else if (auto node = dynamic_cast<const SubscriptNode *>(&expression)) {
                 auto left = infer(*node->base), right = infer(*node->subscript);
@@ -823,6 +840,7 @@ namespace mx {
         }
 
         void declare_function(const std::string &name, TypePtr signature, const SourceLocation &where, bool definition, bool internal, size_t scope) {
+            require(name != "lprintf", where, "lprintf is a reserved built-in function; no declaration is needed");
             auto current = table.at_scope(scope, name);
             auto linked = external_functions.find(name);
             auto symbol = current ? current : linked == external_functions.end() ? SemanticSymbolTable::Entry{} : linked->second;

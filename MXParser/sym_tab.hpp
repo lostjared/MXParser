@@ -21,6 +21,7 @@ namespace mx {
         SourceLocation location;
         bool defined = false;
         bool internal_linkage = false;
+        bool builtin = false;
         std::optional<uint64_t> integer_constant;
     };
 

@@ -2,7 +2,9 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <cstdio>
 #include <functional>
+#include <iostream>
 #include <limits>
 #include <map>
 #include <set>
@@ -58,6 +60,7 @@ namespace mx {
             bool readonly = false;
         };
         struct Allocation {
+            uintptr_t address = 0;
             bool alive = true;
             size_t size = 0;
             std::map<size_t, Cell> cells;
@@ -136,6 +139,7 @@ namespace mx {
         using Objects = std::unordered_map<const SemanticSymbol *, Reference>;
         Objects globals;
         std::vector<std::unique_ptr<Allocation>> allocations;
+        uintptr_t next_address = 0x10000;
         std::unordered_map<const LiteralNode *, Reference> strings;
         struct Scope {
             size_t id;
@@ -236,6 +240,9 @@ namespace mx {
             require(size <= limits.object_bytes, "object allocation limit exceeded");
             auto allocation = std::make_unique<Allocation>();
             allocation->size = size;
+            require(size <= UINTPTR_MAX - 16 && next_address <= UINTPTR_MAX - size - 16, "virtual address space exhausted");
+            allocation->address = next_address;
+            next_address += size + 16;
             auto pointer = allocation.get();
             allocations.push_back(std::move(allocation));
             layout(pointer, type, 0, zero, readonly);
@@ -485,6 +492,7 @@ namespace mx {
                 std::vector<Value> args;
                 for (const auto &arg : n->arguments)
                     args.push_back(eval(*arg));
+                location = n->location;
                 return invoke(callee->var.get_token(), args);
             }
             if (auto n = dynamic_cast<const UnaryNode *>(&expression)) {
@@ -781,7 +789,190 @@ namespace mx {
             }
             frame.temporaries.clear();
         }
+        bool character(TypePtr type) {
+            auto t = bare(type);
+            return t->kind == K::Scalar && (t->scalar == S::Char || t->scalar == S::SignedChar || t->scalar == S::UnsignedChar);
+        }
+        std::string c_string(const Value &value, std::optional<size_t> precision = {}) {
+            require(bare(value.type)->kind == K::Pointer && character(bare(value.type)->element), "lprintf requires a character pointer for strings");
+            auto p = std::get<Pointer>(value.data);
+            require(p.allocation && p.allocation->alive, "lprintf string uses a null or expired pointer");
+            auto bound = precision.value_or(limits.output_bytes);
+            require(bound <= limits.output_bytes, "lprintf string exceeds output limit");
+            std::string result;
+            for (size_t i = 0; i < bound; ++i) {
+                tick();
+                auto unit = bits(load({p, Type::scalar_type(S::Char)})) & 255;
+                if (!unit)
+                    return result;
+                result += static_cast<char>(unit);
+                ++p.offset;
+            }
+            if (precision)
+                return result;
+            if ((bits(load({p, Type::scalar_type(S::Char)})) & 255) == 0)
+                return result;
+            fail("lprintf unterminated string or output limit exceeded");
+        }
+        Value print(const std::vector<Value> &input) {
+            require(!input.empty(), "lprintf requires a format string");
+            auto format_type = Type::pointer(Type::qualified(Type::scalar_type(S::Char), {.is_const = true}));
+            auto format = c_string(convert(input.front(), format_type));
+            std::vector<Value> arguments;
+            for (size_t i = 1; i < input.size(); ++i) {
+                auto value = input[i];
+                if (bare(value.type)->kind == K::Pointer)
+                    arguments.push_back(value);
+                else if (floating(value.type))
+                    arguments.push_back(convert(value, Type::scalar_type(bare(value.type)->scalar == S::Float ? S::Double : bare(value.type)->scalar)));
+                else
+                    arguments.push_back(convert(value, ScalarDataModel::integer_promotion(value.type)));
+            }
+            size_t argument = 0;
+            auto next = [&]() -> Value {
+                require(argument < arguments.size(), "lprintf has too few format arguments");
+                return arguments[argument++];
+            };
+            auto integral = [&](Value value, size_t width) -> Value {
+                require(!floating(value.type) && (bare(value.type)->kind == K::Scalar || (bare(value.type)->kind == K::Tagged && bare(value.type)->tag == TagKind::Enum)) && !std::holds_alternative<std::monostate>(value.data) && size_of(value.type) == width, "lprintf integer argument type does not match format");
+                return value;
+            };
+            std::string output;
+            auto append = [&](const std::string &text) {
+                require(text.size() <= limits.output_bytes - output.size() && text.size() <= size_t(INT32_MAX) - output.size(), "lprintf output limit exceeded");
+                output += text;
+            };
+            auto formatted = [&](const std::string &specification, auto value) {
+                int count = std::snprintf(nullptr, 0, specification.c_str(), value);
+                require(count >= 0, "lprintf formatting failed");
+                require(size_t(count) <= limits.output_bytes - output.size() && size_t(count) <= size_t(INT32_MAX) - output.size(), "lprintf output limit exceeded");
+                std::vector<char> buffer(size_t(count) + 1);
+                int written = std::snprintf(buffer.data(), buffer.size(), specification.c_str(), value);
+                require(written == count, "lprintf formatting failed");
+                append(std::string(buffer.data(), size_t(count)));
+            };
+            for (size_t i = 0; i < format.size();) {
+                tick();
+                if (format[i] != '%') {
+                    append(format.substr(i++, 1));
+                    continue;
+                }
+                ++i;
+                require(i < format.size(), "lprintf incomplete format conversion");
+                if (format[i] == '%') {
+                    append("%");
+                    ++i;
+                    continue;
+                }
+                std::string flags;
+                while (i < format.size() && std::string("-+ #0").find(format[i]) != std::string::npos)
+                    flags += format[i++];
+                auto digits = [&]() {
+                    size_t value = 0;
+                    while (i < format.size() && format[i] >= '0' && format[i] <= '9') {
+                        auto digit = size_t(format[i++] - '0');
+                        require(value <= limits.output_bytes / 10 && value * 10 <= limits.output_bytes && digit <= limits.output_bytes - value * 10, "lprintf field exceeds output limit");
+                        value = value * 10 + digit;
+                    }
+                    return value;
+                };
+                std::optional<size_t> width, precision;
+                if (i < format.size() && format[i] == '*') {
+                    ++i;
+                    auto value = convert(integral(next(), 4), Type::scalar_type(S::Int));
+                    auto count = signed_bits(bits(value), value.type);
+                    if (count < 0) {
+                        flags += '-';
+                        count = -count;
+                    }
+                    require(uint64_t(count) <= limits.output_bytes, "lprintf field exceeds output limit");
+                    width = size_t(count);
+                } else if (i < format.size() && format[i] >= '0' && format[i] <= '9')
+                    width = digits();
+                if (i < format.size() && format[i] == '.') {
+                    ++i;
+                    if (i < format.size() && format[i] == '*') {
+                        ++i;
+                        auto value = convert(integral(next(), 4), Type::scalar_type(S::Int));
+                        auto count = signed_bits(bits(value), value.type);
+                        if (count >= 0) {
+                            require(uint64_t(count) <= limits.output_bytes, "lprintf field exceeds output limit");
+                            precision = size_t(count);
+                        }
+                    } else
+                        precision = digits();
+                }
+                std::string length;
+                if (i < format.size() && std::string("hljztL").find(format[i]) != std::string::npos) {
+                    length += format[i++];
+                    if (i < format.size() && (length == "h" || length == "l") && format[i] == length.front())
+                        length += format[i++];
+                }
+                require(i < format.size(), "lprintf incomplete format conversion");
+                char conversion = format[i++];
+                require(std::string("diouxXfFeEgGaAcspn").find(conversion) != std::string::npos, "lprintf unsupported format conversion");
+                std::string specification = "%" + flags;
+                if (width)
+                    specification += std::to_string(*width);
+                if (precision)
+                    specification += "." + std::to_string(*precision);
+                if (std::string("diouxXn").find(conversion) != std::string::npos) {
+                    require(length != "L", "lprintf invalid integer length modifier");
+                    S signed_type = length == "hh" ? S::SignedChar : length == "h" ? S::Short : length == "ll" ? S::LongLong : length.empty() ? S::Int : S::Long;
+                    S unsigned_kind = length == "hh" ? S::UnsignedChar : length == "h" ? S::UnsignedShort : length == "ll" ? S::UnsignedLongLong : length.empty() ? S::UnsignedInt : S::UnsignedLong;
+                    if (conversion == 'n') {
+                        require(flags.empty() && !width && !precision, "lprintf %n does not allow flags, width, or precision");
+                        auto value = next();
+                        require(bare(value.type)->kind == K::Pointer, "lprintf %n requires an integer pointer");
+                        auto target = bare(value.type)->element;
+                        require(bare(target)->kind == K::Scalar && bare(target)->scalar == signed_type && !target->top_qualifiers().is_const, "lprintf %n pointer type does not match format");
+                        require(output.size() <= (mask(target) >> 1), "lprintf %n count does not fit its target");
+                        store({std::get<Pointer>(value.data), target}, integer(output.size(), target));
+                    } else {
+                        bool signed_conversion = conversion == 'd' || conversion == 'i';
+                        auto type = Type::scalar_type(signed_conversion ? signed_type : unsigned_kind);
+                        auto value = convert(integral(next(), length.empty() || length == "h" || length == "hh" ? 4 : 8), type);
+                        if (signed_conversion)
+                            formatted(specification + "ll" + conversion, static_cast<long long>(signed_bits(bits(value), type)));
+                        else
+                            formatted(specification + "ll" + conversion, static_cast<unsigned long long>(bits(value)));
+                    }
+                } else if (std::string("fFeEgGaA").find(conversion) != std::string::npos) {
+                    require(length.empty() || length == "l" || length == "L", "lprintf invalid floating length modifier");
+                    auto value = next();
+                    require(floating(value.type) && ((length == "L") == (bare(value.type)->scalar == S::LongDouble)), "lprintf floating argument type does not match format");
+                    if (length == "L")
+                        formatted(specification + "L" + conversion, static_cast<long double>(numeric(value)));
+                    else
+                        formatted(specification + conversion, static_cast<double>(numeric(value)));
+                } else if (conversion == 'c') {
+                    require(length.empty() && !precision, "lprintf wide characters and character precision are unsupported");
+                    auto value = integral(next(), 4);
+                    formatted(specification + "c", static_cast<int>(bits(value) & 255));
+                } else if (conversion == 's') {
+                    require(length.empty(), "lprintf wide strings are unsupported");
+                    auto text = c_string(next(), precision);
+                    formatted(specification + "s", text.c_str());
+                } else {
+                    require(length.empty() && !precision, "lprintf invalid pointer format");
+                    auto value = next();
+                    require(bare(value.type)->kind == K::Pointer, "lprintf %p requires an object pointer");
+                    auto p = std::get<Pointer>(value.data);
+                    require(!p.allocation || p.allocation->alive, "lprintf %p uses an expired pointer");
+                    auto address = p.allocation ? p.allocation->address + p.offset : uintptr_t(0);
+                    formatted(specification + "p", address ? reinterpret_cast<void *>(address) : nullptr);
+                }
+            }
+            try {
+                std::cout.write(output.data(), static_cast<std::streamsize>(output.size()));
+            } catch (const std::ios_base::failure &) {
+                return integer(UINT32_MAX);
+            }
+            return std::cout ? integer(output.size()) : integer(UINT32_MAX);
+        }
         Value invoke(const std::string &name, const std::vector<Value> &arguments) {
+            if (name == "lprintf")
+                return print(arguments);
             auto found = functions.find(name);
             require(found != functions.end(), "undefined function: " + name);
             auto &plan = found->second;

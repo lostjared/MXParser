@@ -15,6 +15,7 @@ namespace mx {
         size_t instructions = 1000000;
         size_t recursion = 256;
         size_t object_bytes = 1024 * 1024;
+        size_t output_bytes = 1024 * 1024;
     };
     /** Validated LP64 interpreter. Keep the loaded AST alive. Public calls exchange scalar values. */
     class Interpreter {

@@ -68,7 +68,7 @@ assertions about today's exact exception text.
   integer constant expressions. Allow omitted bounds when an initializer
   determines the size, in an array parameter adjusted to a pointer, or in a
   file-scope `extern` array declaration completed by another declaration.
-- Functions have typed prototypes and non-variadic parameter lists; definitions
+- User functions have typed prototypes and non-variadic parameter lists; definitions
   require named parameters. Use `(void)` for zero parameters. Keep existing
   empty `()` parsing for compatibility, but unprototyped function declarations
   and old-style definitions are outside the validated target. A void call is
@@ -674,3 +674,55 @@ precision, arithmetic conversions, lifetimes, aggregate copies, one-time lvalue
 evaluation, nested switch/loop targets, runtime failures, resource limits, failed
 load recovery, and successful calls after runtime errors. Generated source,
 objects, executables, and comparison manifests stay in the build directory.
+
+## Built-in lprintf
+
+The validated interpreter reserves the function name `lprintf` for formatted
+application-stdout output. It is a language extension to the C99 subset, available
+without a header, declaration, or definition. `SemanticAnalyzer` installs its
+function symbol automatically (`SemanticSymbol::builtin` is true), checks a
+character-format-pointer first argument and scalar/pointer remaining arguments,
+and visits every argument for ordinary name/type validation. User variadic
+functions remain excluded. Source function redeclarations/definitions named
+`lprintf` are rejected; local ordinary objects can shadow it, and attempts to
+call such an object fail normal call validation.
+
+At execution, every argument is evaluated once. Float arguments promote to double;
+small integer/enum arguments receive integer promotions. The format supports
+C99 narrow `diouxX`, `fFeEgGaA`, `c`, `s`, `p`, `n`, and `%%` conversions, the
+`-+ #0` flags, literal or `*` width and precision, and applicable `hh/h/l/ll/j/z/t/L`
+length modifiers. Negative star widths left-align; negative star precisions are
+omitted. Integer arguments must have the expected promoted width (32-bit for
+unmodified/h/hh conversions, 64-bit for l/ll/j/z/t); integer conversions apply the
+model's target signedness/narrowing rules. Floating formats require promoted
+double, or long double for `L`. Counts/size/ptrdiff/max-width modifiers follow
+the subset's fixed LP64 types. Nonstandard extensions, positional arguments, and
+wide `%lc`/`%ls` are rejected explicitly.
+
+`%s` and the format string read bounded interpreter character objects, respecting
+object lifetimes and initialization. String precision limits scanning and permits
+a non-null-terminated array when its requested characters fit. `%c` may emit an
+embedded null byte; returns and `%n` count bytes. `%n` requires a writable pointer
+to the correct signed integer type and checks count representability. `%p` formats
+a deterministic virtual allocation address plus offset (and a host-style null
+pointer representation), never a host allocation address. Pointer arithmetic and
+identity continue to use the interpreter's object references.
+
+Each conversion is checked before passing a matching host C++ argument to
+`snprintf`; raw interpreted variadic data is never passed directly to the host.
+Formatted bytes are buffered and written using `std::cout.write`, which targets
+the application's stdout without changing its stream formatting flags. Successful
+calls return an `int` byte count; output-stream failures return a negative value.
+Formatting errors throw `ExecutionException`. Already evaluated argument side
+effects and `%n` stores are retained if a later conversion fails; buffered output
+is not written until formatting succeeds.
+
+`ExecutionLimits::output_bytes` defaults to 1 MiB per call and bounds format/string
+scanning, field sizes, and buffered output. Scanning also consumes the ordinary
+instruction budget. `lprintf` is part of `Interpreter`/`--run-program`; the legacy
+numeric `Evaluate` visitor remains unchanged. See `examples/lprintf.c`.
+`lprintf` CTest checks stdout capture and host-printf formatting agreement, all
+conversion families, length modifiers, star fields, zero bytes, counts, `%n`,
+pointer identity, errors, short-circuiting, and output-failure recovery. The
+`lprintf-example` test runs the example; this built-in extension is separate from
+the ordinary C99 fixture/compiler comparison corpus.
