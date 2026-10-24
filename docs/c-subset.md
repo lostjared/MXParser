@@ -675,16 +675,16 @@ evaluation, nested switch/loop targets, runtime failures, resource limits, faile
 load recovery, and successful calls after runtime errors. Generated source,
 objects, executables, and comparison manifests stay in the build directory.
 
-## Built-in lprintf
+## Built-in lsprintf
 
-The validated interpreter reserves the function name `lprintf` for formatted
+The validated interpreter reserves the function name `lsprintf` for formatted
 application-stdout output. It is a language extension to the C99 subset, available
 without a header, declaration, or definition. `SemanticAnalyzer` installs its
 function symbol automatically (`SemanticSymbol::builtin` is true), checks a
 character-format-pointer first argument and scalar/pointer remaining arguments,
 and visits every argument for ordinary name/type validation. User variadic
 functions remain excluded. Source function redeclarations/definitions named
-`lprintf` are rejected; local ordinary objects can shadow it, and attempts to
+`lsprintf` are rejected; local ordinary objects can shadow it, and attempts to
 call such an object fail normal call validation.
 
 At execution, every argument is evaluated once. Float arguments promote to double;
@@ -719,10 +719,10 @@ is not written until formatting succeeds.
 
 `ExecutionLimits::output_bytes` defaults to 1 MiB per call and bounds format/string
 scanning, field sizes, and buffered output. Scanning also consumes the ordinary
-instruction budget. `lprintf` is part of `Interpreter`/`--run-program`; the legacy
-numeric `Evaluate` visitor remains unchanged. See `examples/lprintf.c`.
-`lprintf` CTest checks stdout capture and host-printf formatting agreement, all
+instruction budget. `lsprintf` is part of `Interpreter`/`--run-program`; the legacy
+numeric `Evaluate` visitor remains unchanged. See `examples/lsprintf.c`.
+`lsprintf` CTest checks stdout capture and host-printf formatting agreement, all
 conversion families, length modifiers, star fields, zero bytes, counts, `%n`,
 pointer identity, errors, short-circuiting, and output-failure recovery. The
-`lprintf-example` test runs the example; this built-in extension is separate from
+`lsprintf-example` test runs the example; this built-in extension is separate from
 the ordinary C99 fixture/compiler comparison corpus.

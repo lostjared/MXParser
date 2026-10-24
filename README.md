@@ -245,7 +245,7 @@ model and exclusions.
 | Scalar, positional brace, string-array initializers | Yes | Type, shape, extents, and constant requirements | Yes, including omitted-element zero filling |
 | Blocks, `if`, `while`, `for`, return and loop jumps | Yes | Conditions and jump contexts | Yes |
 | `do`/`while`, `switch`, `case`, `default` | Yes | Conditions, constants, duplicate labels, contexts | Yes, including fallthrough and loop jumps |
-| Built-in `lprintf` | Direct calls without a declaration | Format pointer and scalar/pointer arguments | Formatted application stdout |
+| Built-in `lsprintf` | Direct calls without a declaration | Format pointer and scalar/pointer arguments | Formatted application stdout |
 | Preprocessing, unions, bit-fields, VLA, function pointers, user-defined variadics, designated initializers, `goto` | Outside subset | Rejected with diagnostics | Unsupported |
 
 CTest checks the final fixture contract, AST structure and printing, source
@@ -291,7 +291,7 @@ one-past address). This is typed object storage, not a byte-addressable host
 process: incompatible representation casts and character-byte aliasing into
 other object types, and casts that recover enclosing objects from member bounds,
 are unsupported. External libraries, allocation functions,
-and linker support remain outside the subset; `lprintf` is the built-in stdout
+and linker support remain outside the subset; `lsprintf` is the built-in stdout
 exception. No complete undefined-behavior or
 unsequenced-access detection is promised.
 
@@ -311,20 +311,20 @@ errors, rather than a backend for the interpreter.
 
 ## Built-in formatted output
 
-`lprintf` writes printf-style formatted output to the application's stdout and
+`lsprintf` writes printf-style formatted output to the application's stdout and
 returns the number of bytes written, or a negative value on an output failure.
 It is available automatically in the validated interpreter: no header or
 prototype is needed.
 
 ```c
 int main(void) {
-    lprintf("Hello, %s! count=%d, average=%.2f\n", "world", 3, 2.5);
+    lsprintf("Hello, %s! count=%d, average=%.2f\n", "world", 3, 2.5);
     return 0;
 }
 ```
 
 ```bash
-./build/parse-expr --run-program examples/lprintf.c
+./build/parse-expr --run-program examples/lsprintf.c
 ```
 
 Supported conversions are `%d`, `%i`, `%u`, `%o`, `%x`, `%X`, `%f`, `%F`, `%e`,
@@ -339,7 +339,7 @@ arguments, incompatible argument types, invalid strings/pointers, and unsupporte
 formats report execution errors. Wide `%lc`/`%ls`, POSIX positional arguments,
 and nonstandard format extensions are outside this subset. The
 `ExecutionLimits::output_bytes` budget defaults to one MiB per call and bounds
-format/string scanning, field sizes, and generated output. `lprintf` is a reserved
+format/string scanning, field sizes, and generated output. `lsprintf` is a reserved
 built-in function name and cannot be declared or defined by source programs;
 ordinary local objects may shadow it under normal name lookup. This extension is
 available through `Interpreter`/`--run-program`; legacy `Evaluate` is unchanged.

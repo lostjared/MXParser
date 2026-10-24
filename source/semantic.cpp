@@ -233,8 +233,8 @@ namespace mx {
             auto signature = Type::function(Type::scalar_type(S::Int), {Type::pointer(character)});
             auto symbol = entry(SemanticSymbolKind::Function, signature, {});
             symbol->builtin = true;
-            table.enter(0, "lprintf", symbol);
-            external_functions["lprintf"] = symbol;
+            table.enter(0, "lsprintf", symbol);
+            external_functions["lsprintf"] = symbol;
         }
         struct Scope {
             SemanticSymbolTable &table;
@@ -796,11 +796,11 @@ namespace mx {
                 auto signature = bare(callee.type);
                 require(signature->kind == K::Function && signature->has_prototype, where, "Call requires a visible typed function prototype");
                 if (callee.symbol && callee.symbol->builtin) {
-                    require(!node->arguments.empty(), where, "lprintf requires a format string");
+                    require(!node->arguments.empty(), where, "lsprintf requires a format string");
                     assignable(signature->parameters.front(), infer(*node->arguments.front()), node->arguments.front()->location);
                     for (size_t i = 1; i < node->arguments.size(); ++i) {
                         auto argument = decay(infer(*node->arguments[i]).type);
-                        require(scalar(argument), node->arguments[i]->location, "lprintf arguments must be scalar values or object pointers");
+                        require(scalar(argument), node->arguments[i]->location, "lsprintf arguments must be scalar values or object pointers");
                     }
                 } else {
                     require(signature->parameters.size() == node->arguments.size(), where, "Function call argument count does not match prototype");
@@ -840,7 +840,7 @@ namespace mx {
         }
 
         void declare_function(const std::string &name, TypePtr signature, const SourceLocation &where, bool definition, bool internal, size_t scope) {
-            require(name != "lprintf", where, "lprintf is a reserved built-in function; no declaration is needed");
+            require(name != "lsprintf", where, "lsprintf is a reserved built-in function; no declaration is needed");
             auto current = table.at_scope(scope, name);
             auto linked = external_functions.find(name);
             auto symbol = current ? current : linked == external_functions.end() ? SemanticSymbolTable::Entry{} : linked->second;
