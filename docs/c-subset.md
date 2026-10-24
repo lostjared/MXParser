@@ -667,7 +667,7 @@ numeric; use `Interpreter` or `--run-program` for LP64/object execution.
 
 CTest adds `execution`, `subset-example-run`, and, with a system compiler,
 `execution-c99-comparison`. The latter builds and executes defined-result examples
-on an LP64 host and compares printed scalar results with `--run-program`.
+on an LP64 host and compares printed scalar results with the explicit `--print-result` mode.
 Host-specific `long double` storage is excluded from native size comparisons,
 while its fixed-model size is unit tested separately. Tests also cover unsigned
 precision, arithmetic conversions, lifetimes, aggregate copies, one-time lvalue
@@ -726,3 +726,9 @@ conversion families, length modifiers, star fields, zero bytes, counts, `%n`,
 pointer identity, errors, short-circuiting, and output-failure recovery. The
 `lsprintf-example` test runs the example; this built-in extension is separate from
 the ordinary C99 fixture/compiler comparison corpus.
+
+`ls-c --run-program filename` prints only the program's own stdout output; it does
+not append the return value from `main`. The optional `--print-result filename`
+mode runs the same interpreter and appends `Result: <value>` for debugging and
+native-result comparisons. The legacy `Parser::parse()` path also omits its
+result summary while retaining its existing intermediate-code and HTML output.

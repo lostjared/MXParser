@@ -29,7 +29,7 @@ foreach(row IN LISTS rows)
     if(NOT status EQUAL 0 OR NOT native STREQUAL expected)
         message(FATAL_ERROR "Native ${name} returned '${native}', expected '${expected}': ${errors}")
     endif()
-    execute_process(COMMAND "${PARSER}" --run-program "${source}" WORKING_DIRECTORY "${OUTPUT_DIR}"
+    execute_process(COMMAND "${PARSER}" --print-result "${source}" WORKING_DIRECTORY "${OUTPUT_DIR}"
         RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 5)
     string(STRIP "${output}" interpreted)
     if(NOT status EQUAL 0 OR NOT interpreted STREQUAL "Result: ${native}")

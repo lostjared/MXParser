@@ -132,7 +132,7 @@ int main() {
         auto *previous = std::cout.rdbuf(output.rdbuf());
         bool success = parser.parse();
         std::cout.rdbuf(previous);
-        check(success && output.str().find("Result: 14") != std::string::npos, "Legacy evaluator entry point");
+        check(success && output.str().find("ICode:") != std::string::npos && output.str().find("Result:") == std::string::npos, "Legacy evaluator entry point");
     }
     {
         auto tree = parse("flag ? left() : right()");

@@ -145,8 +145,6 @@ namespace mx {
                 unit->accept(html);
                 if (eval.has_function("main")) {
                     eval.call("main");
-                    if (!std::holds_alternative<std::monostate>(eval.result_value()))
-                        std::cout << "Result: " << eval.result() << "\n";
                 }
                 gen_icode = icode.code();
                 gen_html_code = html.code();
@@ -169,7 +167,6 @@ namespace mx {
                     gen_icode += icode.code();
                     gen_html_code += html.code();
                 }
-                std::cout << "Result: " << eval.result() << "\n";
             }
             std::cout << "ICode:\n" << gen_icode << "\n";
 

@@ -157,7 +157,7 @@ int main() {
         auto *previous = std::cout.rdbuf(output.rdbuf());
         bool success = parser.parse();
         std::cout.rdbuf(previous);
-        check(success && output.str().find("Result: 1") != std::string::npos, "Floating point through parse()");
+        check(success && output.str().find("ICode:") != std::string::npos && output.str().find("Result:") == std::string::npos, "Floating point through parse()");
     }
     {
         std::istringstream input("double f(double x){return x/2.0;} int main(){return (int)(f(5.0)*2);}");
@@ -166,7 +166,7 @@ int main() {
         auto *previous = std::cout.rdbuf(output.rdbuf());
         bool success = parser.parse();
         std::cout.rdbuf(previous);
-        check(success && output.str().find("Result: 5") != std::string::npos, "Program through parse()");
+        check(success && output.str().find("ICode:") != std::string::npos && output.str().find("Result:") == std::string::npos, "Program through parse()");
     }
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

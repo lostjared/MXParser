@@ -158,7 +158,7 @@ floating-point average function with a recursive factorial function:
 
 ```bash
 ./build/cmake/ls-c examples/functions.c
-# Result: 21, followed by intermediate code; also writes out.html
+# Prints intermediate code and writes out.html
 ./build/cmake/ls-c --syntax-program examples/functions.c
 ```
 
@@ -228,10 +228,13 @@ interpreter:
 
 ```bash
 ./build/cmake/ls-c --run-program examples/subset.c
-# Result: 2
+# No output: this example returns 2 without calling lsprintf
 ```
 
 This mode validates before execution and writes no HTML or intermediate code.
+It prints only output requested by the program (such as `lsprintf` calls), with
+no automatic `Result:` line. Use `ls-c --print-result filename` to explicitly
+inspect the return value when debugging.
 See the [exact boundary and API notes](docs/c-subset.md) for the fixed LP64 data
 model and exclusions.
 
