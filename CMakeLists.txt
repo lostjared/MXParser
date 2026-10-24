@@ -44,14 +44,14 @@ target_compile_options(test-parser PRIVATE
 )
 
 add_executable(parser-test parser-test.cpp)
-add_executable(parse-expr examples/expr.cpp)
+add_executable(ls-c examples/expr.cpp)
 
 target_compile_options(parser-test PRIVATE -Wall -Wextra -pedantic)
-target_compile_options(parse-expr PRIVATE -Wall -Wextra -pedantic)
+target_compile_options(ls-c PRIVATE -Wall -Wextra -pedantic)
 
 target_link_libraries(test-parser PRIVATE mxparser MXLex::mxlex Argz::argz)
 target_link_libraries(parser-test PRIVATE mxparser MXLex::mxlex Argz::argz)
-target_link_libraries(parse-expr PRIVATE mxparser MXLex::mxlex Argz::argz)
+target_link_libraries(ls-c PRIVATE mxparser MXLex::mxlex Argz::argz)
 
 install(TARGETS mxparser
     EXPORT mxparserTargets
@@ -121,38 +121,38 @@ if(BUILD_TESTING)
     target_link_libraries(aggregate-tests PRIVATE mxparser MXLex::mxlex)
     target_compile_options(aggregate-tests PRIVATE -Wall -Wextra -pedantic)
     add_test(NAME aggregates COMMAND aggregate-tests)
-    add_test(NAME aggregate-syntax COMMAND parse-expr --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/aggregates.c)
-    add_test(NAME aggregate-check COMMAND parse-expr --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/aggregates.c)
+    add_test(NAME aggregate-syntax COMMAND ls-c --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/aggregates.c)
+    add_test(NAME aggregate-check COMMAND ls-c --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/aggregates.c)
     add_executable(lsprintf-tests tests/lsprintf.cpp)
     target_link_libraries(lsprintf-tests PRIVATE mxparser MXLex::mxlex)
     target_compile_options(lsprintf-tests PRIVATE -Wall -Wextra -pedantic)
     add_test(NAME lsprintf COMMAND lsprintf-tests)
-    add_test(NAME lsprintf-example COMMAND parse-expr --run-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/lsprintf.c)
+    add_test(NAME lsprintf-example COMMAND ls-c --run-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/lsprintf.c)
     set_tests_properties(lsprintf-example PROPERTIES PASS_REGULAR_EXPRESSION "Hello from MXParser! count=3, average=2.50")
     add_executable(execution-tests tests/execution.cpp)
     target_link_libraries(execution-tests PRIVATE mxparser MXLex::mxlex)
     target_compile_options(execution-tests PRIVATE -Wall -Wextra -pedantic)
     add_test(NAME execution COMMAND execution-tests ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
-    add_test(NAME subset-example-run COMMAND parse-expr --run-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
+    add_test(NAME subset-example-run COMMAND ls-c --run-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
     set_tests_properties(subset-example-run PROPERTIES PASS_REGULAR_EXPRESSION "Result: 2")
     add_executable(publication-tests tests/publication.cpp)
     target_link_libraries(publication-tests PRIVATE mxparser MXLex::mxlex)
     target_compile_options(publication-tests PRIVATE -Wall -Wextra -pedantic)
     add_test(NAME subset-publication COMMAND publication-tests ${CMAKE_CURRENT_SOURCE_DIR})
-    add_test(NAME subset-example-syntax COMMAND parse-expr --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
-    add_test(NAME subset-example-check COMMAND parse-expr --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
+    add_test(NAME subset-example-syntax COMMAND ls-c --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
+    add_test(NAME subset-example-check COMMAND ls-c --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
     find_program(MXPARSER_C99_COMPILER NAMES cc gcc clang DOC "C compiler for C99 subset syntax comparisons")
     if(MXPARSER_C99_COMPILER)
         add_test(NAME execution-c99-comparison COMMAND ${CMAKE_COMMAND}
             "-DCOMPILER=${MXPARSER_C99_COMPILER}"
-            "-DPARSER=$<TARGET_FILE:parse-expr>"
+            "-DPARSER=$<TARGET_FILE:ls-c>"
             "-DTESTER=$<TARGET_FILE:execution-tests>"
             "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
             "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/runtime-comparison"
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/runtime-compiler.cmake)
         add_test(NAME subset-c99-comparison COMMAND ${CMAKE_COMMAND}
             "-DCOMPILER=${MXPARSER_C99_COMPILER}"
-            "-DPARSER=$<TARGET_FILE:parse-expr>"
+            "-DPARSER=$<TARGET_FILE:ls-c>"
             "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
             "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/c99-comparison"
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/compiler.cmake)
@@ -163,12 +163,12 @@ if(BUILD_TESTING)
     target_link_libraries(subset-tests PRIVATE mxparser MXLex::mxlex)
     target_compile_options(subset-tests PRIVATE -Wall -Wextra -pedantic)
     add_test(NAME subset-fixtures COMMAND subset-tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/subset/manifest.tsv)
-    add_test(NAME function-example COMMAND parse-expr ${CMAKE_CURRENT_SOURCE_DIR}/examples/functions.c)
+    add_test(NAME function-example COMMAND ls-c ${CMAKE_CURRENT_SOURCE_DIR}/examples/functions.c)
     set_tests_properties(function-example PROPERTIES PASS_REGULAR_EXPRESSION "Result: 21")
-    add_test(NAME function-syntax COMMAND parse-expr --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/functions.c)
-    add_test(NAME declaration-syntax COMMAND parse-expr --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/declarations.c)
-    add_test(NAME function-check COMMAND parse-expr --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/functions.c)
-    add_test(NAME declaration-check COMMAND parse-expr --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/declarations.c)
-    add_test(NAME statement-syntax COMMAND parse-expr --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/statements.c)
-    add_test(NAME statement-check COMMAND parse-expr --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/statements.c)
+    add_test(NAME function-syntax COMMAND ls-c --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/functions.c)
+    add_test(NAME declaration-syntax COMMAND ls-c --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/declarations.c)
+    add_test(NAME function-check COMMAND ls-c --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/functions.c)
+    add_test(NAME declaration-check COMMAND ls-c --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/declarations.c)
+    add_test(NAME statement-syntax COMMAND ls-c --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/statements.c)
+    add_test(NAME statement-check COMMAND ls-c --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/statements.c)
 endif()

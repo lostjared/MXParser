@@ -69,4 +69,4 @@ CMake reports when no compiler is available to register this optional test.
 Step 8 adds a separate `execution` suite and `execution-c99-comparison` for the
 validated `Interpreter`. Fixture parsing/type checks remain independent of runtime
 execution; prototype-only programs are still valid syntax inputs. Use
-`parse-expr --run-program examples/subset.c` to execute the combined example.
+`ls-c --run-program examples/subset.c` to execute the combined example.

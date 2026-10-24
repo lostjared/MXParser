@@ -332,7 +332,7 @@ or full compatibility semantics are implied by this parser milestone.
 Try the syntax example with:
 
 ```bash
-./build/cmake/parse-expr --syntax-program examples/declarations.c
+./build/cmake/ls-c --syntax-program examples/declarations.c
 ```
 
 ## Semantic validation
@@ -356,8 +356,8 @@ analyzer.validate(*program); // throws SemanticException with line, column, toke
 From the CLI:
 
 ```bash
-./build/cmake/parse-expr --check-program examples/functions.c
-./build/cmake/parse-expr --check-program examples/declarations.c
+./build/cmake/ls-c --check-program examples/functions.c
+./build/cmake/ls-c --check-program examples/declarations.c
 ```
 
 This mode prints a success message or the first parser/semantic error and returns
@@ -468,15 +468,15 @@ numeric do/switch control flow. Tests cover both the new execution and the legac
 visitor's explicit errors.
 
 ```bash
-./build/cmake/parse-expr --syntax-program examples/statements.c
-./build/cmake/parse-expr --check-program examples/statements.c
+./build/cmake/ls-c --syntax-program examples/statements.c
+./build/cmake/ls-c --check-program examples/statements.c
 ```
 
 ## Aggregates and initialization
 
 Step 6 adds named and anonymous struct/enum definitions, scoped struct forward
 references, complete fixed arrays, and positional initialization. Use
-`parse-expr --check-program examples/aggregates.c` to validate the combined
+`ls-c --check-program examples/aggregates.c` to validate the combined
 example without executing it.
 
 Syntax tags carry an optional `Type::definition`, an `AggregateDefinition`
@@ -546,7 +546,7 @@ Step 7 completes the parser milestone. The README contains the current capabilit
 matrix, and `examples/subset.c` combines tagged/recursive pointer types, enums,
 inferred arrays of structs, nested initializers, narrow strings, qualified pointer
 parameters, struct-valued calls, member access, loops, switch labels, dangling
-`else`, and numeric expressions. It is also executable through `parse-expr --run-program examples/subset.c` after
+`else`, and numeric expressions. It is also executable through `ls-c --run-program examples/subset.c` after
 step 8, returning 2.
 
 The final manifest is enforced by `subset-fixtures` for all milestones. Atomic

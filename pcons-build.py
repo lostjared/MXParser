@@ -143,7 +143,7 @@ if option("PROGRAMS", default=True):
         "parser-test", env, sources=[project_dir / "parser-test.cpp"]
     )
     parse_expr = project.Program(
-        "parse-expr", env, sources=[project_dir / "examples" / "expr.cpp"]
+        "ls-c", env, sources=[project_dir / "examples" / "expr.cpp"]
     )
     test_parser.link(mxparser)
     parser_test.link(mxparser, argz)

@@ -33,13 +33,13 @@ This builds the static `mxparser` library and three example/test programs:
 
 - `build/pcons/test-parser`
 - `build/pcons/parser-test`
-- `build/pcons/parse-expr`
+- `build/pcons/ls-c`
 
 For example:
 
 ```bash
 ./build/pcons/parser-test --input /path/to/source-file
-./build/pcons/parse-expr /path/to/expression-file
+./build/pcons/ls-c /path/to/expression-file
 ```
 
 Use `VARIANT=debug` for a debug build or `PROGRAMS=0` to build only the
@@ -130,10 +130,10 @@ Declarations and function bodies are supported through
 Try the syntax parser from either build system:
 
 ```bash
-./build/cmake/parse-expr --syntax expressions.c
+./build/cmake/ls-c --syntax expressions.c
 ```
 
-The `parse()` API and `parse-expr filename` mode evaluate expressions and emit
+The `parse()` API and `ls-c filename` mode evaluate expressions and emit
 intermediate code plus `out.html`. For a file containing declarations and
 functions, they load the program and call `main()` when it is defined.
 New visitor overloads have throwing defaults so existing visitors remain
@@ -150,16 +150,16 @@ and separate local scopes. Use `(void)` or `()` for a function without parameter
 
 Syntax parsing and semantic validation also support `do`/`while` and
 `switch`/`case`/`default`, including stacked labels and fallthrough. Try
-`parse-expr --check-program examples/statements.c`. The validated `Interpreter` executes these statements, and ICode/HTML emit their
+`ls-c --check-program examples/statements.c`. The validated `Interpreter` executes these statements, and ICode/HTML emit their
 control flow. The legacy `Evaluate` visitor retains its original numeric subset.
 
 For example, [examples/functions.c](examples/functions.c) combines a
 floating-point average function with a recursive factorial function:
 
 ```bash
-./build/cmake/parse-expr examples/functions.c
+./build/cmake/ls-c examples/functions.c
 # Result: 21, followed by intermediate code; also writes out.html
-./build/cmake/parse-expr --syntax-program examples/functions.c
+./build/cmake/ls-c --syntax-program examples/functions.c
 ```
 
 To call a parsed function directly:
@@ -205,7 +205,7 @@ cmake --build build/cmake
 ctest --test-dir build/cmake --output-on-failure
 ```
 
-Use `parse-expr --check-program filename` for name and type validation without
+Use `ls-c --check-program filename` for name and type validation without
 execution or output files. The library API is `mx::SemanticAnalyzer` in
 `<MXParser/semantic.hpp>`; see the [semantic API and limits](docs/c-subset.md#semantic-validation).
 Validation and `Interpreter` use the documented LP64 model; the legacy `Evaluate`
@@ -218,8 +218,8 @@ subset, with execution limits listed below. [examples/subset.c](examples/subset.
 initializers, pointer parameters, struct returns, and nested control flow:
 
 ```bash
-./build/cmake/parse-expr --check-program examples/subset.c
-./build/cmake/parse-expr --syntax-program examples/subset.c
+./build/cmake/ls-c --check-program examples/subset.c
+./build/cmake/ls-c --syntax-program examples/subset.c
 ```
 
 The first command checks names/types; the second prints C syntax. Neither runs
@@ -227,7 +227,7 @@ source code nor writes `out.html`. To execute the same example with the validate
 interpreter:
 
 ```bash
-./build/cmake/parse-expr --run-program examples/subset.c
+./build/cmake/ls-c --run-program examples/subset.c
 # Result: 2
 ```
 
@@ -324,7 +324,7 @@ int main(void) {
 ```
 
 ```bash
-./build/parse-expr --run-program examples/lsprintf.c
+./build/ls-c --run-program examples/lsprintf.c
 ```
 
 Supported conversions are `%d`, `%i`, `%u`, `%o`, `%x`, `%X`, `%f`, `%F`, `%e`,
@@ -412,7 +412,7 @@ numeric subset described above.
 
 4. **Add name resolution and semantic validation.**
    Status: complete. Use `mx::SemanticAnalyzer::validate()` or
-   `parse-expr --check-program filename` to check a translation unit without
+   `ls-c --check-program filename` to check a translation unit without
    execution. See the [semantic API and limits](docs/c-subset.md#semantic-validation).
    CTest checks the step 1–4 semantic fixtures and the scalar model, scopes,
    qualifiers, calls, returns, and diagnostics.
