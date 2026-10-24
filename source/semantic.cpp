@@ -884,9 +884,9 @@ namespace mx {
                 }
                 require(list != nullptr, expression.location, "Array initializer requires positional braces; brace elision is unsupported");
                 require(!list->elements.empty(), expression.location, "Empty initializer is unsupported");
-                require(!t->bound || list->elements.size() <= *t->bound, expression.location, "Too many elements in array initializer");
                 for (const auto &value : list->elements)
                     initialize(t->element, *value, constant);
+                require(!t->bound || list->elements.size() <= *t->bound, expression.location, "Too many elements in array initializer");
                 auto result = Type::array(t->element, t->bound.value_or(list->elements.size()));
                 require(*result->bound <= SIZE_MAX / ScalarDataModel::size_of(t->element), expression.location, "Array size exceeds the data model");
                 return Type::qualified(result, type->top_qualifiers());

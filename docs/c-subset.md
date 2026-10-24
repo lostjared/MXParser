@@ -1,15 +1,15 @@
 # Basic C subset contract
 
-This is the acceptance contract for README roadmap steps 2–7, not a claim of
-implemented C99 support. Step 1 defines this boundary and records the baseline.
+This is the implemented acceptance contract for README roadmap steps 1–7.
+It describes a restricted C99 subset, not full C99 conformance or execution
+support for every accepted program.
 The [fixture manifest](../tests/subset/manifest.tsv) maps examples to milestones.
 
 ## Capability matrix
 
 "Partial" means the restrictions below matter. `SemanticAnalyzer` now provides
 an independent validation pass for the implemented grammar, including code that
-never executes. Steps 1–6 implement the grammar and validation described below; step 7 audits
-the published subset. Execution support remains the numeric interpreter subset.
+never executes. Steps 1–7 implement and audit the grammar and validation described below. Execution support remains the numeric interpreter subset.
 
 | Feature | Current parsing | Current validation / execution | Target parsing / validation | Step | Acceptance fixtures |
 | --- | --- | --- | --- | --- | --- |
@@ -28,8 +28,8 @@ the published subset. Execution support remains the numeric interpreter subset.
 | Scalar, positional brace, and character-array string initializers | Yes, with explicit aggregate braces | Recursive shape/type checks, inferred extents, narrow escapes; numeric execution only | Yes / type, shape, and bounds checking | 6 | `initializers`, `bad-initializer` |
 | File-scope `static` and `extern` | Preserved in AST and printing | Static storage/linkage conflict checks and compatible repeated declarations | Implemented within one translation unit; no linking | 3, 4 | `storage`, `bad-storage` |
 | AST source locations and useful diagnostics | AST start locations and parser exception locations | Line, column when available, offending token, expected syntax; lexer reason retained | Implemented for current grammar | 2 | `missing-semicolon`, `unexpected-eof` |
-| Combined translation unit and AST round trip | Numeric subset | Numeric execution | Yes / all included features together | 7 | `combined` |
-| Excluded features listed below | Some fragments accepted | No support contract | Explicit unsupported-feature diagnostic | 1, 7 | All `excluded-*` fixtures |
+| Combined translation unit and AST round trip | Yes | Syntax/type checks, AST round trips, optional C99 compiler comparison; numeric execution only | Verified within the chosen subset | 7 | `combined` |
+| Excluded features listed below | Some forms parse before semantic rejection | Named exclusion diagnostics; no execution | Verified rejection at the applicable phase | 1, 7 | All `excluded-*` fixtures |
 
 Fixture names in this document omit `.c`. Every negative fixture has an expected
 diagnostic meaning in the manifest. Those meanings are a future contract, not
@@ -193,9 +193,11 @@ definition; it cannot be a bare scalar or typedef alias use.
 
 Run the existing CMake/CTest commands in the README. The `subset-fixtures` test
 reads every manifest entry and checks current syntax behavior through
-`parse_program()` without evaluation or output files. Successfully parsed inputs
-owned by steps 1–6 also check the manifest's semantic expectation through
-`SemanticAnalyzer`. A semantic rejection can therefore be a syntax acceptance.
+`parse_program()` without evaluation or output files. Current and target parsing
+must agree; every successfully parsed fixture also checks its semantic expectation
+through `SemanticAnalyzer`, including step 7 exclusions. A semantic rejection can
+therefore be a syntax acceptance. Excluded fixtures additionally assert diagnostic
+keywords naming their unsupported feature.
 Parse errors must produce a
 nonempty `ParserException` with a line, token, and column when available; exact wording is not frozen. Other exceptions fail
 the test. The existing expression and function regressions remain unchanged.
@@ -531,9 +533,61 @@ rewritten.
 The `aggregates` CTest suite checks syntax/validation, source locations, layout
 and expression facts, parse/print/parse stability, analyzer reuse, malformed input,
 and explicit unsupported initializer visitor errors. The fixture runner now checks
-all step 1–6 semantic expectations. Flexible-array declarations, brace elision,
+all step 1–7 semantic expectations. Flexible-array declarations, brace elision,
 and aggregate copy initializers are parsed as syntax and rejected by validation;
 their manifest entries retain semantic rejection. Designators, unions, bit-fields,
 and enum forward declarations retain explicit parser rejections. The evaluator
 and code generators report aggregate definitions/brace initialization as unsupported;
 aggregate storage, zero filling, and execution remain step 8 work.
+
+## Publication and verification
+
+Step 7 completes the parser milestone. The README contains the current capability
+matrix, and `examples/subset.c` combines tagged/recursive pointer types, enums,
+inferred arrays of structs, nested initializers, narrow strings, qualified pointer
+parameters, struct-valued calls, member access, loops, switch labels, dangling
+`else`, and numeric expressions. It is a syntax/validation example; it requires
+step 8's object and control-flow execution work to run in the interpreter.
+
+The final manifest is enforced by `subset-fixtures` for all milestones. Atomic
+qualifiers, `inline`, wide literals, and address initializers remain syntax
+acceptances with semantic rejection, matching the parser/validator separation.
+They have no validated acceptance. Other exclusions with type-dependent shape
+checks, such as flexible arrays and brace elision, also fail during validation.
+Preprocessor directives, complex types, old-style parameters, compound literals,
+generic selection, ordinary labels/`goto`, and static assertions now report their
+excluded feature explicitly. Diagnostic wording is not frozen beyond the named
+feature and source location.
+
+`subset-publication` reparses every positive fixture and the combined example,
+validates both trees, checks stable printed C and AST shape, and audits all 26
+concrete AST node kinds, including legacy `AssignmentNode`. The traversal includes
+embedded aggregate definitions, enum expressions, parameter declarations, and
+array bounds. It checks source locations and nonempty printers, verifies throwing
+defaults for visitors implementing only the original interface, and checks the
+evaluator/ICode/HTML visitors' explicit errors for unsupported expression,
+initializer, and control-flow nodes. Additional assertions check the combined
+example's aggregate sizes, function signature, and dangling-`else` association.
+The suite rejects 34 truncated inputs and four malformed token sequences with
+useful expected-syntax and source diagnostics.
+
+When a system `cc`, `gcc`, or `clang` is found, CMake registers
+`subset-c99-comparison`. This runs the validator and compares all positive fixture
+originals and printed translation units with the selected compiler using
+`-std=c99 -pedantic-errors -fsyntax-only`. Generated files stay in the build tree.
+The comparison neither links nor runs C; it verifies acceptance and printed syntax,
+not execution equivalence, full C99 conformance, host ABI agreement, or acceptance
+of deliberately excluded C features. Positive examples avoid compiler extensions
+and undefined behavior. Compiler unavailability is reported during configuration;
+select an installed compiler explicitly with `-DMXPARSER_C99_COMPILER=/path/to/cc`.
+
+```bash
+cmake -S . -B build/cmake -DBUILD_TESTING=ON
+cmake --build build/cmake
+ctest --test-dir build/cmake --output-on-failure
+ctest --test-dir build/cmake -R 'subset-(fixtures|publication|c99-comparison)' --output-on-failure
+```
+
+Remaining execution limitations are listed in the README matrix. Parsing and
+validation do not promise runtime object storage, aggregate initialization,
+pointer operations, `sizeof` evaluation, or the new switch/do control flow.

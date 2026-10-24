@@ -122,6 +122,23 @@ if(BUILD_TESTING)
     add_test(NAME aggregates COMMAND aggregate-tests)
     add_test(NAME aggregate-syntax COMMAND parse-expr --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/aggregates.c)
     add_test(NAME aggregate-check COMMAND parse-expr --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/aggregates.c)
+    add_executable(publication-tests tests/publication.cpp)
+    target_link_libraries(publication-tests PRIVATE mxparser MXLex::mxlex)
+    target_compile_options(publication-tests PRIVATE -Wall -Wextra -pedantic)
+    add_test(NAME subset-publication COMMAND publication-tests ${CMAKE_CURRENT_SOURCE_DIR})
+    add_test(NAME subset-example-syntax COMMAND parse-expr --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
+    add_test(NAME subset-example-check COMMAND parse-expr --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
+    find_program(MXPARSER_C99_COMPILER NAMES cc gcc clang DOC "C compiler for C99 subset syntax comparisons")
+    if(MXPARSER_C99_COMPILER)
+        add_test(NAME subset-c99-comparison COMMAND ${CMAKE_COMMAND}
+            "-DCOMPILER=${MXPARSER_C99_COMPILER}"
+            "-DPARSER=$<TARGET_FILE:parse-expr>"
+            "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/c99-comparison"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/compiler.cmake)
+    else()
+        message(STATUS "C compiler unavailable: subset-c99-comparison will not be registered")
+    endif()
     add_executable(subset-tests tests/subset.cpp)
     target_link_libraries(subset-tests PRIVATE mxparser MXLex::mxlex)
     target_compile_options(subset-tests PRIVATE -Wall -Wextra -pedantic)

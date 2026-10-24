@@ -49,18 +49,20 @@ fixtures/excluded-compound-literal.c	7	reject	reject	reject	unsupported feature:
 fixtures/excluded-designated-initializer.c	7	reject	reject	reject	unsupported feature: designated initializer
 fixtures/excluded-goto.c	7	reject	reject	reject	unsupported feature: goto
 fixtures/excluded-preprocessor.c	7	reject	reject	reject	unsupported feature: preprocessor
-fixtures/excluded-atomic.c	7	accept	reject	reject	unsupported feature: atomic
+fixtures/excluded-atomic.c	7	accept	accept	reject	unsupported feature: atomic
 fixtures/excluded-complex.c	7	reject	reject	reject	unsupported feature: complex
 fixtures/excluded-generic.c	7	reject	reject	reject	unsupported feature: generic
 fixtures/excluded-static-local.c	7	reject	reject	reject	unsupported feature: static local
-fixtures/excluded-inline.c	7	accept	reject	reject	unsupported feature: inline
+fixtures/excluded-inline.c	7	accept	accept	reject	unsupported feature: inline
 fixtures/excluded-old-style.c	7	reject	reject	reject	unsupported feature: old style
 fixtures/excluded-flexible-array.c	7	accept	accept	reject	unsupported feature: flexible array
-fixtures/excluded-wide-literal.c	7	accept	reject	reject	unsupported feature: wide literal
+fixtures/excluded-wide-literal.c	7	accept	accept	reject	unsupported feature: wide literal
 fixtures/excluded-brace-elision.c	7	accept	accept	reject	unsupported feature: brace elision
 fixtures/excluded-auto.c	7	reject	reject	reject	unsupported feature: auto
 fixtures/excluded-register.c	7	reject	reject	reject	unsupported feature: register
 fixtures/excluded-extern-local.c	7	reject	reject	reject	unsupported feature: extern local
 fixtures/excluded-enum-forward.c	7	reject	reject	reject	unsupported feature: enum forward
-fixtures/excluded-address-initializer.c	7	accept	reject	reject	unsupported feature: address initializer
+fixtures/excluded-address-initializer.c	7	accept	accept	reject	unsupported feature: address initializer
 fixtures/excluded-aggregate-copy-initializer.c	7	accept	accept	reject	unsupported feature: aggregate copy initializer
+fixtures/excluded-label.c	7	reject	reject	reject	unsupported feature: ordinary label
+fixtures/excluded-static-assert.c	7	reject	reject	reject	unsupported feature: static assertion

@@ -212,11 +212,45 @@ execution or output files. The library API is `mx::SemanticAnalyzer` in
 Validation uses the documented LP64 model; the evaluator retains its numeric
 subset and permissive legacy behavior.
 
+## Validated C subset
+
+Roadmap steps 1–7 are complete for the documented single-translation-unit
+subset. [examples/subset.c](examples/subset.c) combines structs, enums, arrays,
+initializers, pointer parameters, struct returns, and nested control flow:
+
+```bash
+./build/cmake/parse-expr --check-program examples/subset.c
+./build/cmake/parse-expr --syntax-program examples/subset.c
+```
+
+The first command checks names/types; the second prints C syntax. Neither runs
+source code nor writes `out.html`. See the [exact boundary and API notes](docs/c-subset.md)
+for the fixed LP64 data model and exclusions.
+
+| Feature | Parsing | Semantic validation | Execution |
+| --- | --- | --- | --- |
+| Scalar declarations, typedefs, prototypes, functions | Yes | Names, scopes, qualifiers, conversions, and calls | Numeric subset |
+| Arithmetic, assignments, casts, calls, `?:`, comma | Yes | Operand and lvalue checks | Numeric subset |
+| Narrow characters and adjacent strings | Yes | Escape decoding and typed literals | Unsupported |
+| Pointers, fixed arrays, subscripts, `sizeof` | Yes | Complete types, constant bounds, pointer conversions | Unsupported |
+| Structs, enum definitions, `.`, `->` | Yes | Scoped tags, layout, members, enum constants | Unsupported |
+| Scalar, positional brace, string-array initializers | Yes | Type, shape, extents, and constant requirements | Numeric expression initializers only |
+| Blocks, `if`, `while`, `for`, return and loop jumps | Yes | Conditions and jump contexts | Numeric subset |
+| `do`/`while`, `switch`, `case`, `default` | Yes | Conditions, constants, duplicate labels, contexts | Unsupported |
+| Preprocessing, unions, bit-fields, VLA, function pointers, variadics, designated initializers, `goto` | Outside subset | Rejected with diagnostics | Unsupported |
+
+CTest checks the final fixture contract, AST structure and printing, source
+locations, malformed/EOF input, and visitor compatibility. When `cc`, `gcc`, or
+`clang` is available, `subset-c99-comparison` also checks every positive fixture
+and the combined example, both original and printed, with
+`-std=c99 -pedantic-errors -fsyntax-only`. Set `MXPARSER_C99_COMPILER` at CMake
+configuration time to select a compiler; configuration reports when this optional
+comparison cannot be registered. The comparison does not link or execute C.
+
 ## Roadmap: basic C language subset
 
-The following steps are planned work, building on the expression parser and
-numeric function interpreter described above. Complete them in order, keeping
-the existing expression and program APIs working throughout.
+Steps 1–7 below are implemented. Step 8 is the remaining optional execution
+expansion; the existing numeric interpreter remains available.
 
 The first target is a documented subset of C99 syntax for a single translation
 unit: scalar types, typedefs, pointers, fixed-size arrays, simple structs and
@@ -228,15 +262,14 @@ compound literals, designated initializers, and `goto`/labels. This target does
 not claim full C99 conformance.
 
 Parsing, semantic validation, and execution are separate capabilities. The parser
-should produce an AST for the entire chosen subset; a semantic pass should check
-names and types before execution. The evaluator can remain a numeric subset
-until the final optional step. Document support separately for each capability.
+produces the chosen subset's AST; the independent semantic pass checks names and
+types. The evaluator remains the numeric subset described above.
 
 1. **Define the grammar and acceptance cases.**
    Status: complete. See the [subset contract and support matrix](docs/c-subset.md)
    and [acceptance fixture manifest](tests/subset/manifest.tsv). The CTest
-   `subset-fixtures` suite checks current parsing expectations; target parsing
-   and semantic expectations remain explicit work for later milestones.
+   `subset-fixtures` suite enforces final parsing and semantic expectations for
+   every fixture, including named exclusion diagnostics.
 
    - Write a compact grammar and feature matrix covering the target above,
      current support, planned additions, and explicit exclusions. Specify the
@@ -329,6 +362,11 @@ until the final optional step. Document support separately for each capability.
      covered by rejection tests. Execution can still be unsupported.
 
 7. **Validate and publish the parser subset.**
+   Status: complete. See the [published matrix](#validated-c-subset),
+   [combined example](examples/subset.c), and [verification notes](docs/c-subset.md#publication-and-verification).
+   CTest audits every AST kind, accepted fixture round trips, malformed/EOF
+   diagnostics, explicit visitor errors, and optional system C99 comparisons.
+
    - Extend AST printing and visitor interfaces for every new node. Each visitor
      must either handle the node or report an explicit unsupported operation.
    - Add end-to-end syntax examples combining declarations, functions, arrays,

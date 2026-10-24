@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <set>
 #include <sstream>
 #include <string>
@@ -21,6 +22,7 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    const std::map<std::string, std::vector<std::string>> exclusion_words = {{"static-assert", {"static assertion"}}, {"label", {"labels"}}, {"union", {"union"}}, {"bit-field", {"bit field"}}, {"function-pointer", {"function pointer"}}, {"variadic", {"variadic"}}, {"compound-literal", {"compound literal"}}, {"designated-initializer", {"designated initializer"}}, {"goto", {"goto"}}, {"preprocessor", {"preprocessor"}}, {"atomic", {"atomic"}}, {"complex", {"complex"}}, {"generic", {"generic"}}, {"static-local", {"block-scope", "static"}}, {"inline", {"inline"}}, {"old-style", {"old style"}}, {"flexible-array", {"flexible array"}}, {"wide-literal", {"wide"}}, {"brace-elision", {"brace elision"}}, {"auto", {"auto"}}, {"register", {"register"}}, {"extern-local", {"block-scope", "extern"}}, {"enum-forward", {"enum forward"}}, {"address-initializer", {"address constants"}}, {"aggregate-copy-initializer", {"aggregate copy initializer"}}};
     int failures = 0;
     size_t cases = 0;
     size_t syntax_gaps = 0;
@@ -42,8 +44,28 @@ int main(int argc, char **argv) {
             continue;
         }
         ++cases;
-        if (fields[2] != fields[3])
+        if (fields[2] != fields[3]) {
             ++syntax_gaps;
+            std::cerr << fields[0] << ": current parsing differs from final contract\n";
+            ++failures;
+        }
+        auto check_exclusion = [&](const std::string &message) {
+            auto name = std::filesystem::path(fields[0]).stem().string();
+            if (!name.starts_with("excluded-"))
+                return;
+            const auto found = exclusion_words.find(name.substr(9));
+            if (found == exclusion_words.end()) {
+                std::cerr << fields[0] << ": exclusion has no diagnostic assertion\n";
+                ++failures;
+                return;
+            }
+            for (const auto &word : found->second) {
+                if (message.find(word) == std::string::npos) {
+                    std::cerr << fields[0] << ": expected exclusion diagnostic containing '" << word << "', got " << message << '\n';
+                    ++failures;
+                }
+            }
+        };
         const auto source_path = manifest_path.parent_path() / fields[0];
         std::ifstream input(source_path);
         if (!input) {
@@ -56,7 +78,7 @@ int main(int argc, char **argv) {
             mx::Parser parser(input);
             auto ast = parser.parse_program();
             accepted = ast != nullptr;
-            if (accepted && fields[1][0] <= '6') {
+            if (accepted) {
                 ++semantic_cases;
                 bool valid = true;
                 try {
@@ -64,6 +86,7 @@ int main(int argc, char **argv) {
                     analyzer.validate(*ast);
                 } catch (const mx::SemanticException &error) {
                     valid = false;
+                    check_exclusion(error.what());
                     if (error.location.line == 0 || error.location.token.empty()) {
                         std::cerr << source_path << ": missing semantic diagnostic location\n";
                         ++failures;
@@ -75,6 +98,7 @@ int main(int argc, char **argv) {
                 }
             }
         } catch (const mx::ParserException &error) {
+            check_exclusion(error.what());
             if (std::string(error.what()).empty()) {
                 std::cerr << source_path << ": empty parser diagnostic\n";
                 ++failures;
@@ -103,6 +127,6 @@ int main(int argc, char **argv) {
         std::cerr << "Empty or unreadable fixture manifest\n";
         ++failures;
     }
-    std::cout << cases << " subset fixtures checked against current syntax behavior; " << syntax_gaps << " documented target syntax gaps; " << semantic_cases << " step 1-6 semantic expectations checked. No execution performed.\n";
+    std::cout << cases << " subset fixtures checked against current syntax behavior; " << syntax_gaps << " documented target syntax gaps; " << semantic_cases << " final semantic expectations checked. No execution performed.\n";
     return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

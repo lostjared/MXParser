@@ -98,6 +98,10 @@ namespace mx {
                     std::cerr << scan_failure->what() << "\n";
                     return false;
                 }
+                if (token.get_token() == "#" || token.get_token() == "%:") {
+                    scan_failure.emplace("Unsupported feature: preprocessor directives", SourceLocation::from_token(token));
+                    return false;
+                }
                 if (token.get_token() == "<:")
                     token.set_token("[", TOKEN_TYPE::OPERATOR, CHAR_TYPE::CHAR_LBRACKET);
                 else if (token.get_token() == ":>")
@@ -423,6 +427,10 @@ namespace mx {
         };
         for (;;) {
             const auto word = top().get_token();
+            if (word == "_Static_assert")
+                fail("Unsupported feature: static assertion");
+            if (word == "_Complex" || word == "_Imaginary")
+                fail("Unsupported feature: complex types");
             if (word == "typedef" || word == "static" || word == "extern" || word == "inline" || word == "auto" || word == "register") {
                 if (!storage_allowed)
                     fail("Expected type name without a storage class");
@@ -556,6 +564,8 @@ namespace mx {
         for (;;) {
             if (top().get_token() == "...")
                 fail("Unsupported feature: variadic functions");
+            if (!starts_declaration(index) && top().get_type() == TOKEN_TYPE::IDENTIFIER && !keyword(top().get_token()))
+                fail("Unsupported feature: old style function parameters");
             Parameter parameter;
             parameter.location = SourceLocation::from_token(top());
             auto specifiers = declaration_specifiers(false);
@@ -636,6 +646,8 @@ namespace mx {
             advance();
             auto type = type_name();
             expect(")");
+            if (top().get_token() == "{")
+                fail("Unsupported feature: compound literal");
             auto result = std::make_unique<CastNode>(std::move(type), cast());
             result->location = SourceLocation::from_token(start);
             return result;
@@ -706,6 +718,8 @@ namespace mx {
 
     std::unique_ptr<ExprNode> Parser::primary() {
         Token current = top();
+        if (current.get_token() == "_Generic")
+            fail("Unsupported feature: generic selection (_Generic)");
         if (match("(")) {
             auto result = expr();
             expect(")");
@@ -901,6 +915,10 @@ namespace mx {
     }
 
     std::unique_ptr<ASTNode> Parser::function_statement(bool allow_declaration) {
+        if (top().get_token() == "_Static_assert")
+            fail("Unsupported feature: static assertion");
+        if (top().get_token() == "goto" || (top().get_type() == TOKEN_TYPE::IDENTIFIER && !keyword(top().get_token()) && peek(1).get_token() == ":"))
+            fail("Unsupported feature: goto and ordinary labels");
         auto location = SourceLocation::from_token(top());
         if (top().get_token() == "{")
             return block();
