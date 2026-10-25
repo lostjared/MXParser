@@ -1,6 +1,9 @@
 #include "MXParser/interpreter.hpp"
+#include "MXParser/parser.hpp"
+#include "arithmetic.hpp"
 #include <algorithm>
 #include <bit>
+#include <charconv>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -136,6 +139,10 @@ namespace mx {
             std::vector<std::vector<const SemanticSymbol *>> locals{1};
         };
         std::unordered_map<std::string, Plan> functions;
+        std::vector<std::unique_ptr<ProgramNode>> submissions;
+        std::string session_source;
+        size_t declaration_count = 0;
+        size_t query_count = 0;
         using Objects = std::unordered_map<const SemanticSymbol *, Reference>;
         Objects globals;
         std::vector<std::unique_ptr<Allocation>> allocations;
@@ -449,7 +456,7 @@ namespace mx {
                 value = op == "+" ? a + b : op == "-" ? a - b : a * b;
             else {
                 int64_t n = 0;
-                bool overflow = op == "+" ? __builtin_add_overflow(x, y, &n) : op == "-" ? __builtin_sub_overflow(x, y, &n) : __builtin_mul_overflow(x, y, &n);
+                bool overflow = op == "+" ? add_overflow(x, y, &n) : op == "-" ? subtract_overflow(x, y, &n) : multiply_overflow(x, y, &n);
                 auto limit = mask(common) >> 1;
                 require(!overflow && n >= -static_cast<int64_t>(limit) - 1 && n <= static_cast<int64_t>(limit), "signed arithmetic overflow");
                 value = std::bit_cast<uint64_t>(n);
@@ -1040,9 +1047,7 @@ namespace mx {
                 throw;
             }
         }
-        void load(const ProgramNode &program) {
-            remaining = limits.instructions;
-            analyzer.validate(program);
+        void install(const ProgramNode &program) {
             for (const auto &node : program.declarations) {
                 if (auto f = dynamic_cast<const FunctionNode *>(node.get()); f && f->body) {
                     auto &plan = functions[f->name.get_token()];
@@ -1069,6 +1074,121 @@ namespace mx {
                 if (auto d = dynamic_cast<const DeclarationNode *>(node.get()))
                     declaration(*d);
         }
+        void load(const ProgramNode &program) {
+            remaining = limits.instructions;
+            analyzer.validate(program);
+            install(program);
+            session_source = program.to_string();
+            declaration_count = program.declarations.size();
+        }
+        std::optional<std::string> display(const Value &value) {
+            if (std::holds_alternative<std::monostate>(value.data))
+                return {};
+            if (auto n = std::get_if<uint64_t>(&value.data))
+                return unsigned_type(value.type) ? std::to_string(*n) : std::to_string(signed_bits(*n, value.type));
+            if (auto n = std::get_if<double>(&value.data)) {
+                char buffer[128];
+                auto result = bare(value.type)->scalar == S::Float ? std::to_chars(buffer, buffer + sizeof(buffer), static_cast<float>(*n)) : std::to_chars(buffer, buffer + sizeof(buffer), *n);
+                require(result.ec == std::errc{}, "cannot display floating result");
+                return std::string(buffer, result.ptr);
+            }
+            if (auto pointer = std::get_if<Pointer>(&value.data)) {
+                require(!pointer->allocation || pointer->allocation->alive, "result points to an expired object");
+                std::ostringstream text;
+                text << "0x" << std::hex << (pointer->allocation ? pointer->allocation->address + pointer->offset : uintptr_t(0));
+                return text.str();
+            }
+            auto name = bare(value.type)->name;
+            return name.empty() ? "<struct>" : "<struct " + name + ">";
+        }
+        std::optional<std::string> query(const FunctionNode &function) {
+            auto &plan = functions.at(function.name.get_token());
+            auto frame = std::make_unique<Frame>();
+            frame->plan = &plan;
+            auto *active = frame.get();
+            frames.push_back(std::move(frame));
+            try {
+                sync(*active, {0});
+                auto value = eval(dynamic_cast<const ExprNode &>(*function.body->statements.front()));
+                auto text = display(value);
+                while (!active->scopes.empty())
+                    pop(*active);
+                clear_temporaries(*active);
+                frames.pop_back();
+                return text;
+            } catch (...) {
+                while (!active->scopes.empty())
+                    pop(*active);
+                clear_temporaries(*active);
+                frames.pop_back();
+                throw;
+            }
+        }
+        std::optional<std::string> submit(const std::string &input) {
+            remaining = limits.instructions;
+            auto end = input.find_last_not_of(" \t\r\n");
+            if (end == std::string::npos)
+                return {};
+            auto text = input.substr(0, end + 1);
+            std::istringstream probe(text);
+            Scanner scanner(probe);
+            Token token;
+            auto token_type = scanner.lex(token);
+            if (token_type == TOKEN_TYPE::TOKEN_NULL)
+                return {};
+            if (token_type == TOKEN_TYPE::TOKEN_ERROR)
+                throw ParserException("Expected valid interactive input", SourceLocation::from_token(token));
+            const auto first_name = token.get_token();
+            auto last_token = first_name;
+            bool empty_statements = first_name == ";";
+            while ((token_type = scanner.lex(token)) != TOKEN_TYPE::TOKEN_NULL) {
+                if (token_type == TOKEN_TYPE::TOKEN_ERROR)
+                    throw ParserException("Expected valid interactive input", SourceLocation::from_token(token));
+                last_token = token.get_token();
+                empty_statements &= last_token == ";";
+            }
+            if (empty_statements)
+                return {};
+            static const std::set<std::string> specifiers = {"void", "_Bool", "char", "short", "int", "long", "float", "double", "signed", "unsigned", "const", "volatile", "restrict", "typedef", "static", "extern", "struct", "enum", "union", "inline", "auto", "register", "_Atomic", "_Complex", "_Static_assert"};
+            auto symbol = analyzer.symbols().lookup(first_name);
+            bool declaration = specifiers.contains(first_name) || (symbol && symbol->kind == SemanticSymbolKind::Typedef);
+            bool suppress = last_token == ";";
+            std::string query_name;
+            if (declaration) {
+                if (last_token != ";")
+                    text += "\n;";
+            } else {
+                do {
+                    query_name = "__ls_repl_query_" + std::to_string(query_count++);
+                } while (analyzer.symbols().lookup(query_name));
+                text = "void " + query_name + "(void){\n" + text + (suppress ? "\n}\n" : "\n;}\n");
+            }
+            std::istringstream source(session_source + "\n" + text);
+            Parser parser(source);
+            auto candidate = parser.parse_program();
+            SemanticAnalyzer verification;
+            verification.validate(*candidate, true);
+            require(candidate->declarations.size() >= declaration_count, "interactive declaration history changed unexpectedly");
+            candidate->declarations.erase(candidate->declarations.begin(), candidate->declarations.begin() + declaration_count);
+            FunctionNode *expression_function = nullptr;
+            if (!declaration) {
+                expression_function = dynamic_cast<FunctionNode *>(candidate->declarations.back().get());
+                require(expression_function && expression_function->body && expression_function->body->statements.size() == 1 && dynamic_cast<ExprNode *>(expression_function->body->statements.front().get()), "REPL input must be one expression, declaration, or function definition");
+            }
+            auto accepted = candidate.get();
+            auto canonical = candidate->to_string();
+            submissions.push_back(std::move(candidate));
+            analyzer.append(*accepted, true);
+            session_source += "\n" + canonical;
+            declaration_count += accepted->declarations.size();
+            install(*accepted);
+            if (expression_function) {
+                auto result = query(*expression_function);
+                if (!suppress)
+                    return result;
+            }
+            return {};
+        }
     };
     ExecutionException::ExecutionException(const std::string &message, SourceLocation location) : std::runtime_error(SemanticException(message, location).what()), location(std::move(location)) {}
     Interpreter::Interpreter(ExecutionLimits limits) : implementation(std::make_unique<Implementation>(limits)), limits(limits) {}
@@ -1078,6 +1198,7 @@ namespace mx {
         next->load(program);
         implementation = std::move(next);
     }
+    std::optional<std::string> Interpreter::submit(const std::string &source) { return implementation->submit(source); }
     ExecutionValue Interpreter::call(const std::string &name, const std::vector<ExecutionValue> &arguments) {
         auto &runtime = *implementation;
         runtime.remaining = limits.instructions;

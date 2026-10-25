@@ -5,6 +5,14 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+function(mxparser_warnings target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -pedantic)
+    endif()
+endfunction()
+
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
@@ -29,25 +37,26 @@ target_include_directories(mxparser PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_compile_options(mxparser PRIVATE
-    -Wall
-    -Wextra
-    -pedantic
-)
+mxparser_warnings(mxparser)
 
 add_executable(test-parser test.cpp)
 
-target_compile_options(test-parser PRIVATE
-    -Wall
-    -Wextra
-    -pedantic
-)
+mxparser_warnings(test-parser)
 
 add_executable(parser-test parser-test.cpp)
-add_executable(ls-c examples/expr.cpp)
+add_executable(ls-c examples/expr.cpp examples/repl.cpp)
+if(NOT WIN32)
+    find_path(READLINE_INCLUDE_DIR readline/readline.h)
+    find_library(READLINE_LIBRARY NAMES readline)
+    if(NOT READLINE_INCLUDE_DIR OR NOT READLINE_LIBRARY)
+        message(FATAL_ERROR "GNU Readline development files are required for ls-c on Unix. Install readline-devel/libreadline-dev or set READLINE_INCLUDE_DIR and READLINE_LIBRARY.")
+    endif()
+    target_include_directories(ls-c PRIVATE ${READLINE_INCLUDE_DIR})
+    target_link_libraries(ls-c PRIVATE ${READLINE_LIBRARY})
+endif()
 
-target_compile_options(parser-test PRIVATE -Wall -Wextra -pedantic)
-target_compile_options(ls-c PRIVATE -Wall -Wextra -pedantic)
+mxparser_warnings(parser-test)
+mxparser_warnings(ls-c)
 
 target_link_libraries(test-parser PRIVATE mxparser MXLex::mxlex Argz::argz)
 target_link_libraries(parser-test PRIVATE mxparser MXLex::mxlex Argz::argz)
@@ -93,39 +102,58 @@ install(FILES
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(arithmetic-tests tests/arithmetic.cpp)
+    target_include_directories(arithmetic-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    mxparser_warnings(arithmetic-tests)
+    add_test(NAME portable-arithmetic COMMAND arithmetic-tests)
+    add_executable(repl-tests tests/repl.cpp)
+    target_link_libraries(repl-tests PRIVATE mxparser MXLex::mxlex)
+    mxparser_warnings(repl-tests)
+    add_test(NAME repl-state COMMAND repl-tests)
+    if(UNIX)
+        find_program(MXPARSER_PYTHON3 NAMES python3)
+        if(MXPARSER_PYTHON3)
+            add_test(NAME repl-terminal COMMAND ${MXPARSER_PYTHON3} ${CMAKE_CURRENT_SOURCE_DIR}/tests/repl-terminal.py $<TARGET_FILE:ls-c>)
+            set_tests_properties(repl-terminal PROPERTIES TIMEOUT 30)
+        endif()
+    endif()
+    add_test(NAME repl-cli COMMAND ${CMAKE_COMMAND}
+        "-DPARSER=$<TARGET_FILE:ls-c>"
+        "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/repl-cli"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/repl-cli.cmake)
     add_executable(expression-tests tests/expressions.cpp)
     target_link_libraries(expression-tests PRIVATE mxparser MXLex::mxlex)
-    target_compile_options(expression-tests PRIVATE -Wall -Wextra -pedantic)
+    mxparser_warnings(expression-tests)
     add_test(NAME expressions COMMAND expression-tests)
     add_executable(function-tests tests/functions.cpp)
     target_link_libraries(function-tests PRIVATE mxparser MXLex::mxlex)
-    target_compile_options(function-tests PRIVATE -Wall -Wextra -pedantic)
+    mxparser_warnings(function-tests)
     add_test(NAME functions COMMAND function-tests)
     add_executable(type-source-tests tests/types.cpp)
     target_link_libraries(type-source-tests PRIVATE mxparser MXLex::mxlex)
-    target_compile_options(type-source-tests PRIVATE -Wall -Wextra -pedantic)
+    mxparser_warnings(type-source-tests)
     add_test(NAME types-and-source COMMAND type-source-tests)
     add_executable(declarator-tests tests/declarators.cpp)
     target_link_libraries(declarator-tests PRIVATE mxparser MXLex::mxlex)
-    target_compile_options(declarator-tests PRIVATE -Wall -Wextra -pedantic)
+    mxparser_warnings(declarator-tests)
     add_test(NAME declarators COMMAND declarator-tests)
     add_executable(semantic-tests tests/semantic.cpp)
     target_link_libraries(semantic-tests PRIVATE mxparser MXLex::mxlex)
-    target_compile_options(semantic-tests PRIVATE -Wall -Wextra -pedantic)
+    mxparser_warnings(semantic-tests)
     add_test(NAME semantics COMMAND semantic-tests)
     add_executable(statement-tests tests/statements.cpp)
     target_link_libraries(statement-tests PRIVATE mxparser MXLex::mxlex)
-    target_compile_options(statement-tests PRIVATE -Wall -Wextra -pedantic)
+    mxparser_warnings(statement-tests)
     add_test(NAME statements COMMAND statement-tests)
     add_executable(aggregate-tests tests/aggregates.cpp)
     target_link_libraries(aggregate-tests PRIVATE mxparser MXLex::mxlex)
-    target_compile_options(aggregate-tests PRIVATE -Wall -Wextra -pedantic)
+    mxparser_warnings(aggregate-tests)
     add_test(NAME aggregates COMMAND aggregate-tests)
     add_test(NAME aggregate-syntax COMMAND ls-c --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/aggregates.c)
     add_test(NAME aggregate-check COMMAND ls-c --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/aggregates.c)
     add_executable(lsprintf-tests tests/lsprintf.cpp)
     target_link_libraries(lsprintf-tests PRIVATE mxparser MXLex::mxlex)
-    target_compile_options(lsprintf-tests PRIVATE -Wall -Wextra -pedantic)
+    mxparser_warnings(lsprintf-tests)
     add_test(NAME lsprintf COMMAND lsprintf-tests)
     add_test(NAME lsprintf-example COMMAND ls-c --run-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/lsprintf.c)
     set_tests_properties(lsprintf-example PROPERTIES
@@ -133,7 +161,7 @@ if(BUILD_TESTING)
         FAIL_REGULAR_EXPRESSION "Result:")
     add_executable(execution-tests tests/execution.cpp)
     target_link_libraries(execution-tests PRIVATE mxparser MXLex::mxlex)
-    target_compile_options(execution-tests PRIVATE -Wall -Wextra -pedantic)
+    mxparser_warnings(execution-tests)
     add_test(NAME execution COMMAND execution-tests ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
     add_test(NAME subset-example-run COMMAND ls-c --run-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
     set_tests_properties(subset-example-run PROPERTIES FAIL_REGULAR_EXPRESSION "Result:")
@@ -141,19 +169,21 @@ if(BUILD_TESTING)
     set_tests_properties(subset-example-result PROPERTIES PASS_REGULAR_EXPRESSION "Result: 2")
     add_executable(publication-tests tests/publication.cpp)
     target_link_libraries(publication-tests PRIVATE mxparser MXLex::mxlex)
-    target_compile_options(publication-tests PRIVATE -Wall -Wextra -pedantic)
+    mxparser_warnings(publication-tests)
     add_test(NAME subset-publication COMMAND publication-tests ${CMAKE_CURRENT_SOURCE_DIR})
     add_test(NAME subset-example-syntax COMMAND ls-c --syntax-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
     add_test(NAME subset-example-check COMMAND ls-c --check-program ${CMAKE_CURRENT_SOURCE_DIR}/examples/subset.c)
     find_program(MXPARSER_C99_COMPILER NAMES cc gcc clang DOC "C compiler for C99 subset syntax comparisons")
     if(MXPARSER_C99_COMPILER)
-        add_test(NAME execution-c99-comparison COMMAND ${CMAKE_COMMAND}
-            "-DCOMPILER=${MXPARSER_C99_COMPILER}"
-            "-DPARSER=$<TARGET_FILE:ls-c>"
-            "-DTESTER=$<TARGET_FILE:execution-tests>"
-            "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
-            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/runtime-comparison"
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/runtime-compiler.cmake)
+        if(NOT WIN32)
+            add_test(NAME execution-c99-comparison COMMAND ${CMAKE_COMMAND}
+                "-DCOMPILER=${MXPARSER_C99_COMPILER}"
+                "-DPARSER=$<TARGET_FILE:ls-c>"
+                "-DTESTER=$<TARGET_FILE:execution-tests>"
+                "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+                "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/runtime-comparison"
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/runtime-compiler.cmake)
+        endif()
         add_test(NAME subset-c99-comparison COMMAND ${CMAKE_COMMAND}
             "-DCOMPILER=${MXPARSER_C99_COMPILER}"
             "-DPARSER=$<TARGET_FILE:ls-c>"
@@ -165,7 +195,7 @@ if(BUILD_TESTING)
     endif()
     add_executable(subset-tests tests/subset.cpp)
     target_link_libraries(subset-tests PRIVATE mxparser MXLex::mxlex)
-    target_compile_options(subset-tests PRIVATE -Wall -Wextra -pedantic)
+    mxparser_warnings(subset-tests)
     add_test(NAME subset-fixtures COMMAND subset-tests ${CMAKE_CURRENT_SOURCE_DIR}/tests/subset/manifest.tsv)
     add_test(NAME function-example COMMAND ls-c ${CMAKE_CURRENT_SOURCE_DIR}/examples/functions.c)
     set_tests_properties(function-example PROPERTIES

@@ -143,11 +143,14 @@ if option("PROGRAMS", default=True):
         "parser-test", env, sources=[project_dir / "parser-test.cpp"]
     )
     parse_expr = project.Program(
-        "ls-c", env, sources=[project_dir / "examples" / "expr.cpp"]
+        "ls-c", env, sources=[project_dir / "examples" / "expr.cpp", project_dir / "examples" / "repl.cpp"]
     )
     test_parser.link(mxparser)
     parser_test.link(mxparser, argz)
     parse_expr.link(mxparser)
+    if os.name != "nt":
+        readline = project.find_package("readline", required=True)
+        parse_expr.link(readline)
 
 final_prefix = Path(
     get_var(

@@ -53,6 +53,9 @@ namespace mx {
         const std::vector<SemanticMember> &members(const TypePtr &type) const;
 
       private:
+        friend class Interpreter;
+        void validate(const ProgramNode &program, bool interactive);
+        void append(const ProgramNode &program, bool interactive);
         struct Implementation;
         std::unique_ptr<Implementation> implementation;
     };

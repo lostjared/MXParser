@@ -1,4 +1,5 @@
 #include "MXParser/ast.hpp"
+#include "arithmetic.hpp"
 #include <cmath>
 #include <limits>
 #include <sstream>
@@ -112,11 +113,11 @@ namespace mx {
                 std::int64_t result = 0;
                 bool overflow = false;
                 if (op == "+")
-                    overflow = __builtin_add_overflow(lhs, rhs, &result);
+                    overflow = add_overflow(lhs, rhs, &result);
                 else if (op == "-")
-                    overflow = __builtin_sub_overflow(lhs, rhs, &result);
+                    overflow = subtract_overflow(lhs, rhs, &result);
                 else if (op == "*")
-                    overflow = __builtin_mul_overflow(lhs, rhs, &result);
+                    overflow = multiply_overflow(lhs, rhs, &result);
                 else if (op == "/") {
                     if (!rhs)
                         throw std::runtime_error("Error divide by zero");

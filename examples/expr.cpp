@@ -1,3 +1,4 @@
+#include "repl.hpp"
 #include <MXParser/ast.hpp>
 #include <MXParser/interpreter.hpp>
 #include <MXParser/parser.hpp>
@@ -9,6 +10,8 @@
 #include <type_traits>
 
 int main(int argc, char **argv) {
+    if (argc == 1 || ((argc == 2 || argc == 3) && std::string(argv[1]) == "--repl"))
+        return mx::run_repl(argc == 3 ? argv[2] : nullptr);
 
     bool syntax_only = argc == 3 && std::string(argv[1]) == "--syntax";
     bool syntax_program = argc == 3 && std::string(argv[1]) == "--syntax-program";
@@ -16,7 +19,7 @@ int main(int argc, char **argv) {
     bool run_program = print_result || (argc == 3 && std::string(argv[1]) == "--run-program");
     bool check_program = argc == 3 && std::string(argv[1]) == "--check-program";
     if (argc != 2 && !syntax_only && !syntax_program && !check_program && !run_program) {
-        std::cerr << "Program requires one argument:\n" << argv[0] << " [--syntax | --syntax-program | --check-program | --run-program | --print-result] filename\n";
+        std::cerr << "Program requires one argument:\n" << argv[0] << " [--syntax | --syntax-program | --check-program | --run-program | --print-result] filename\n       --repl [filename]\n";
         return EXIT_FAILURE;
     }
 

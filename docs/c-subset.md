@@ -732,3 +732,49 @@ not append the return value from `main`. The optional `--print-result filename`
 mode runs the same interpreter and appends `Result: <value>` for debugging and
 native-result comparisons. The legacy `Parser::parse()` path also omits its
 result summary while retaining its existing intermediate-code and HTML output.
+
+## Interactive execution
+
+`ls-c --repl` (also the no-argument invocation) provides a C-expression REPL.
+Unix terminals use GNU Readline; Windows terminals use `ReadConsoleW` with cooked
+line editing, Unicode-to-UTF-8 conversion, and no Readline dependency. Redirected
+stdin uses line input without prompts on both platforms. Multiline bracketed input
+and block comments use a continuation prompt; errors do not terminate the loop.
+Readline history is limited to 500 lines in memory. Commands include `:help`,
+`:quit`, `:exit`, `:reset`, and `:cancel`; `exit()` and `quit()` also exit.
+
+`Interpreter::submit(source)` accepts interactive declarations/functions or one
+expression, returning an optional display string. A final semicolon suppresses an
+expression's display; void has no display. Numeric results retain their resolved
+signedness and width, pointers show virtual addresses, and structs have summaries.
+A function can be defined across lines by opening its brace on the first line.
+`--repl filename` loads declarations and initializers without calling `main`.
+
+Submission parsing and a separate verification pass check the accepted source
+history plus the proposed input before extending the live semantic environment.
+Existing symbol identities, canonical tag layouts, globals, object references,
+and function bindings remain live. Only the new input's initializer or expression
+executes: history is not replayed. Owned AST fragments keep expression facts valid
+until session replacement. An expression runs in a temporary frame so function
+calls and aggregate temporaries receive normal lifetime cleanup.
+
+Interactive global initializers can use runtime expressions/calls, unlike normal
+file-scope initializers. This relaxation is private to interactive analysis;
+`load()` and `--check-program` retain the file subset's constant-initializer rules.
+Definitions still follow C duplicate/visibility rules. Compile/type failures do
+not commit the input. Runtime failures retain accepted declarations and completed
+writes, so failed initializations can leave zero/partially initialized bindings;
+`:reset` clears all state. Execution budgets apply to each submission.
+
+CMake uses MSVC warning flags on MSVC and portable overflow checks replace the
+GCC-only arithmetic builtins. Readline is linked only to the Unix CLI; it is not a
+parser-library dependency. Windows has no Readline discovery/link requirement.
+The native C99 runtime comparison is registered only on non-Windows LP64 hosts,
+since Windows uses LLP64 while the interpreter deliberately models LP64.
+
+CTest adds persistent-session cases, strict-file-validation regressions, portable
+arithmetic boundary cases, and piped CLI transcripts covering multiline input,
+preloading, reset/cancel, recovery, and EOF. With Python on Unix, a pseudo-terminal
+test also checks real Readline prompts, history recall, line editing, and Ctrl-C/
+Ctrl-D. Native Windows console behavior requires a Windows terminal for runtime
+verification; piped transcript tests are portable across both backends.

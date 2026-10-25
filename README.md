@@ -7,6 +7,8 @@ MXParser is a simple C++23 parser built on MXLex.
 - A C++23 compiler
 - Installed MXLex and Argz libraries/headers
 - Pcons through [uv](https://docs.astral.sh/uv/), or CMake 3.10+
+- GNU Readline development headers/library on Unix-like systems (`readline-devel`
+  or `libreadline-dev`); Windows uses its native console API and needs no Readline
 
 MXParser consumes installed dependencies and does not require their source
 repositories to be adjacent to the MXParser checkout. Standard prefixes such
@@ -83,6 +85,71 @@ cmake -S . -B build/cmake \
     -DCMAKE_PREFIX_PATH="/path/to/mxlex-prefix;/path/to/argz-prefix"
 cmake --build build/cmake
 ```
+
+## Interactive REPL
+
+Start an interactive session with GNU Readline editing/history on Unix, or native
+Windows console line editing on Windows:
+
+```bash
+./build/ls-c --repl
+# Running ./build/ls-c without arguments also starts the REPL.
+```
+
+```text
+>>> 1 + 2 * 3
+7
+>>> int count = 4
+>>> count += 2
+6
+>>> double half(double x) {
+...     return x / 2.0;
+... }
+>>> half(count)
+3
+>>> lsprintf("count=%d\n", count);
+count=6
+>>> :quit
+```
+
+Variables, typedefs, structs/enums, functions, and side effects persist. Declare
+variables using C types; function definitions follow the existing C subset and
+use `(void)` for no parameters. Open a function's `{` on its first line to enter
+a multiline definition. Parentheses, brackets, braces, and block comments produce
+`...` continuation prompts. Expressions print bare values (without `Result:`);
+a trailing semicolon suppresses the value, and void calls print none. Declarations
+can omit their final semicolon. Runtime initializers such as `double y=half(count)`
+are allowed in the REPL. Accepted initializers and earlier calls are never replayed.
+
+Use `:help`, `:quit`/`:exit`, `exit()`/`quit()`, `:reset` to clear the session, and
+`:cancel` to discard unfinished input. Ctrl-C cancels pending terminal input;
+Ctrl-D exits on Unix, and Ctrl-Z followed by Enter exits on Windows. Readline keeps
+up to 500 input lines in memory for arrow-key history. The Windows console provides
+native editing/history. Redirected input works on either platform without prompts.
+
+Preload a file's declarations/functions without automatically calling `main`:
+
+```bash
+./build/ls-c --repl examples/functions.c
+# Then enter: factorial(5), average(2.5, 5.0), or main()
+```
+
+Normal C duplicate-definition rules apply; use assignments to change variables
+or `:reset` before defining them again. Compile/type errors leave accepted state
+unchanged. Runtime errors report the problem and return to the prompt, retaining
+completed writes; a validated declaration whose initializer fails remains bound
+(with its zero-initialized or partially initialized storage). Object results show
+an address or struct summary; use member expressions or `lsprintf` to inspect them.
+Session state is discarded when the REPL exits, and history is not saved to disk.
+Existing file execution/check/syntax modes keep their behavior.
+
+The CMake Windows build does not search for or link Readline. For a Visual Studio
+Debug build, start it with `.\build\Debug\ls-c.exe --repl`. Build with a C++23
+Windows toolchain and the usual MXLex/Argz dependencies. Compiler-specific overflow
+intrinsics have been replaced with portable checked arithmetic. On Unix, a
+nonstandard Readline installation can be selected using `CMAKE_PREFIX_PATH`, or
+`READLINE_INCLUDE_DIR` and `READLINE_LIBRARY`. Pcons also links Readline only on
+non-Windows builds. The static parser library itself has no Readline dependency.
 
 ## C expressions
 

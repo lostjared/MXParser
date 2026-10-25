@@ -1,4 +1,5 @@
 #include "MXParser/semantic.hpp"
+#include "arithmetic.hpp"
 #include <algorithm>
 #include <atomic>
 #include <bit>
@@ -228,6 +229,7 @@ namespace mx {
         };
         std::vector<SwitchContext> switches;
         TypePtr return_type;
+        bool interactive = false;
         Implementation() {
             auto character = Type::qualified(Type::scalar_type(S::Char), {.is_const = true});
             auto signature = Type::function(Type::scalar_type(S::Int), {Type::pointer(character)});
@@ -536,7 +538,7 @@ namespace mx {
             if (u)
                 return (op == "+" ? a + b : op == "-" ? a - b : a * b) & mask(result);
             int64_t value = 0;
-            bool overflow = op == "+" ? __builtin_add_overflow(x, y, &value) : op == "-" ? __builtin_sub_overflow(x, y, &value) : __builtin_mul_overflow(x, y, &value);
+            bool overflow = op == "+" ? add_overflow(x, y, &value) : op == "-" ? subtract_overflow(x, y, &value) : multiply_overflow(x, y, &value);
             auto width = bits(result);
             if (overflow || (width < 64 && (value < -(int64_t(1) << (width - 1)) || value >= (int64_t(1) << (width - 1)))))
                 return {};
@@ -982,7 +984,7 @@ namespace mx {
                     table.enter(table.depth() - 1, name, symbol);
                 }
                 if (declarator.initializer) {
-                    type = initialize(type, *declarator.initializer, table.depth() == 1);
+                    type = initialize(type, *declarator.initializer, table.depth() == 1 && !interactive);
                     table.lookup_current(name)->type = type;
                 }
                 declarations[&declarator] = table.lookup_current(name);
@@ -1100,10 +1102,22 @@ namespace mx {
 
     SemanticAnalyzer::SemanticAnalyzer() : implementation(std::make_unique<Implementation>()) {}
     SemanticAnalyzer::~SemanticAnalyzer() = default;
-    void SemanticAnalyzer::validate(const ProgramNode &program) {
+    void SemanticAnalyzer::validate(const ProgramNode &program) { validate(program, false); }
+    void SemanticAnalyzer::validate(const ProgramNode &program, bool interactive) {
         implementation = std::make_unique<Implementation>();
-        for (const auto &declaration : program.declarations)
-            implementation->analyze(*declaration);
+        append(program, interactive);
+    }
+    void SemanticAnalyzer::append(const ProgramNode &program, bool interactive) {
+        auto previous = implementation->interactive;
+        implementation->interactive = interactive;
+        try {
+            for (const auto &declaration : program.declarations)
+                implementation->analyze(*declaration);
+        } catch (...) {
+            implementation->interactive = previous;
+            throw;
+        }
+        implementation->interactive = previous;
     }
     const ExpressionInfo &SemanticAnalyzer::info(const ExprNode &expression) const { return implementation->facts.at(&expression); }
     const SemanticSymbol &SemanticAnalyzer::symbol(const Declarator &declaration) const { return *implementation->declarations.at(&declaration); }
