@@ -243,14 +243,19 @@ namespace mx {
     } // namespace
     int run_repl(const char *filename) {
         try {
-            auto interpreter = std::make_unique<Interpreter>();
+            LineReader reader;
+            auto make_interpreter = [] {
+                auto interpreter = std::make_unique<Interpreter>();
+                interpreter->set_interrupt_handler([] { return interrupted != 0; });
+                return interpreter;
+            };
+            auto interpreter = make_interpreter();
             if (filename) {
                 std::ifstream input(filename);
                 if (!input)
                     throw std::runtime_error(std::string("Cannot open file: ") + filename);
                 interpreter->submit(std::string(std::istreambuf_iterator<char>(input), {}));
             }
-            LineReader reader;
             if (reader.interactive())
                 std::cout << "ls-C Interactive use C expressions, statements, declarations, or functions. :help for commands.\n";
             std::string pending;
@@ -275,7 +280,7 @@ namespace mx {
                     return EXIT_SUCCESS;
                 if (command == ":reset") {
                     pending.clear();
-                    interpreter = std::make_unique<Interpreter>();
+                    interpreter = make_interpreter();
                     if (reader.interactive())
                         std::cout << "Session reset.\n";
                     continue;
@@ -298,7 +303,11 @@ namespace mx {
                     if (auto result = interpreter->submit(pending))
                         std::cout << *result << '\n';
                 } catch (const std::exception &error) {
-                    std::cerr << "Error: " << error.what() << '\n';
+                    if (interrupted) {
+                        interrupted = 0;
+                        std::cerr << "KeyboardInterrupt\n";
+                    } else
+                        std::cerr << "Error: " << error.what() << '\n';
                 }
                 pending.clear();
             }

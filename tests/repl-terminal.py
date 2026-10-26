@@ -90,6 +90,23 @@ try:
     assert b"KeyboardInterrupt" in until(b"$> ")
     os.write(master, b"5+6\n")
     assert b"\n11\n" in until(b"$> ")
+    os.write(master, b'total=9; lsprintf("running\\n"); while(1) { int local=0; ++local; }\n')
+    until(b"running\r\n")
+    os.write(master, b"\x03")
+    response = until(b"$> ")
+    assert b"KeyboardInterrupt" in response and b"instruction limit" not in response
+    os.write(master, b"total\n")
+    assert b"\n9\n" in until(b"$> ")
+    os.write(master, b":reset\n")
+    until(b"$> ")
+    os.write(master, b'void spin(void) { lsprintf("running\\n"); while(1) {} }\n')
+    until(b"$> ")
+    os.write(master, b"spin()\n")
+    until(b"running\r\n")
+    os.write(master, b"\x03")
+    assert b"KeyboardInterrupt" in until(b"$> ")
+    os.write(master, b"5+6\n")
+    assert b"\n11\n" in until(b"$> ")
     os.write(master, b"\x04")
     assert process.wait(timeout=10) == 0
 except BaseException:

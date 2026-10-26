@@ -156,7 +156,9 @@ for (int i = 0; i < 3; ++i) {
 ```
 
 Use `:help`, `:quit`/`:exit`, `exit()`/`quit()`, `:reset` to clear the session, and
-`:cancel` to discard unfinished input. Ctrl-C cancels pending terminal input;
+`:cancel` to discard unfinished input. Ctrl-C cancels pending terminal input or
+interrupts running interpreter code and returns to the prompt. Session variables
+and completed side effects are preserved when execution is interrupted.
 Ctrl-D exits on Unix, and Ctrl-Z followed by Enter exits on Windows. Readline keeps
 up to 500 input lines in memory for arrow-key history. The Windows console provides
 native editing/history. Redirected input works on either platform without prompts.

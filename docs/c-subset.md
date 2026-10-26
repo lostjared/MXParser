@@ -754,6 +754,10 @@ line submits the code when brackets and block comments are closed; otherwise it
 continues collecting input. Errors do not terminate the loop.
 Readline history is limited to 500 lines in memory. Commands include `:help`,
 `:quit`, `:exit`, `:reset`, and `:cancel`; `exit()` and `quit()` also exit.
+Ctrl-C interrupts running terminal submissions and returns to the prompt with
+completed side effects preserved. The interpreter polls an optional
+`set_interrupt_handler()` callback during execution; returning true raises an
+execution error and unwinds active scopes. Cancellation callbacks survive `load()`.
 
 `Interpreter::submit(source)` accepts interactive declarations/functions,
 statements, or an expression, returning an optional display string. A final semicolon suppresses an

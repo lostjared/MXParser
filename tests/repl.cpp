@@ -152,6 +152,26 @@ int main() {
         error(limited, "forever()", "instruction limit");
         error(limited, "while(1) {}", "instruction limit");
         value(limited, "2+2", "4");
+        mx::Interpreter cancellable;
+        quiet(cancellable, "int progress=0;");
+        size_t polls = 0;
+        cancellable.set_interrupt_handler([&] { return ++polls > 100; });
+        error(cancellable, "while(1) { int local=1; progress+=local; }", "execution interrupted");
+        cancellable.set_interrupt_handler({});
+        value(cancellable, "progress>0", "1");
+        value(cancellable, "2+2", "4");
+        bool cancel = false;
+        cancellable.set_interrupt_handler([&] { return cancel; });
+        cancellable.load(*program);
+        cancel = true;
+        try {
+            cancellable.call();
+            check(false, "Expected interruption after load");
+        } catch (const mx::ExecutionException &exception) {
+            check(std::string(exception.what()).find("execution interrupted") != std::string::npos, "Wrong interruption after load");
+        }
+        cancel = false;
+        check(std::get<int64_t>(cancellable.call()) == 3, "Execution did not recover after interruption");
     } catch (const std::exception &exception) {
         check(false, exception.what());
     }

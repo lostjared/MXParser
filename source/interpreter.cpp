@@ -155,6 +155,7 @@ namespace mx {
     struct Interpreter::Implementation {
         SemanticAnalyzer analyzer;
         std::unordered_map<std::string, NativeCallback> callbacks;
+        std::function<bool()> interrupt_handler;
         bool in_callback = false;
         ExecutionLimits limits;
         size_t remaining = 0;
@@ -166,6 +167,7 @@ namespace mx {
                 fail(message);
         }
         void tick() {
+            require(!interrupt_handler || !interrupt_handler(), "execution interrupted");
             require(remaining > 0, "instruction limit exceeded");
             --remaining;
         }
@@ -1366,12 +1368,17 @@ namespace mx {
         implementation->require(!implementation->in_callback, "cannot reenter interpreter from native callback");
         auto next = std::make_unique<Implementation>(limits);
         next->callbacks = implementation->callbacks;
+        next->interrupt_handler = implementation->interrupt_handler;
         next->load(program);
         implementation = std::move(next);
     }
     std::optional<std::string> Interpreter::submit(const std::string &source) {
         implementation->require(!implementation->in_callback, "cannot reenter interpreter from native callback");
         return implementation->submit(source);
+    }
+    void Interpreter::set_interrupt_handler(std::function<bool()> handler) {
+        implementation->require(!implementation->in_callback, "cannot reenter interpreter from native callback");
+        implementation->interrupt_handler = std::move(handler);
     }
     void Interpreter::register_function(const std::string &name, NativeCallback callback) {
         auto &runtime = *implementation;

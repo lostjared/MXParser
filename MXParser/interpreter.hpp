@@ -87,6 +87,8 @@ namespace mx {
         /** Add interactive declarations, execute statements, or evaluate an expression, preserving prior objects and functions. */
         std::optional<std::string> submit(const std::string &source);
         ExecutionValue call(const std::string &name = "main", const std::vector<ExecutionValue> &arguments = {});
+        /** Poll for cancellation during execution. Returning true interrupts execution with normal scope cleanup. Survives load(). */
+        void set_interrupt_handler(std::function<bool()> handler);
         /** Map an external C function prototype to a C++ callback. Registrations survive load().
          * Parameters use C value semantics; pointer views can modify interpreter objects.
          * Return a scalar or monostate for void. Reentering this interpreter is unsupported.
