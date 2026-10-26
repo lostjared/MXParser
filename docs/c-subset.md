@@ -661,7 +661,7 @@ fallthrough follows source order, `break` leaves the nearest loop/switch, and
 aggregate temporaries clean up on return or error. Completed global writes are
 retained when a later operation fails.
 
-`ExecutionLimits` sets an instruction budget (default 1,000,000 per call/load),
+`ExecutionLimits` sets an instruction budget (default 20,000,000 per call/load/submit),
 recursion depth (256), and maximum single object size (1 MiB). Expired object
 metadata is retained until program replacement for reliable dangling-pointer
 checks. `ExecutionException` carries runtime source locations; validation still
