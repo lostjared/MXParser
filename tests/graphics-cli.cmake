@@ -1,0 +1,15 @@
+file(MAKE_DIRECTORY "${OUTPUT_DIR}")
+file(WRITE "${OUTPUT_DIR}/session.txt" ":import \"${MODULE}\" \"${SOURCE_DIR}/examples/graphics/graphics.ls-h\"\ngfx_open(\"REPL graphics\",64,64);\ngfx_color(255,0,0,255);\ngfx_fill_rect(4,4,16,16);\nint image=gfx_image_load(\"${SOURCE_DIR}/examples/graphics/checker.bmp\");\ngfx_image_width(image)\ngfx_image_draw(image,24,24,32,32);\ngfx_present();\ngfx_close();\n:quit\n")
+execute_process(COMMAND "${PARSER}" --repl INPUT_FILE "${OUTPUT_DIR}/session.txt"
+    RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 10)
+string(REPLACE "\r\n" "\n" output "${output}")
+if(NOT status EQUAL 0 OR NOT output STREQUAL "32\n" OR NOT errors STREQUAL "")
+    message(FATAL_ERROR "REPL graphics failed: ${status}\n${output}\n${errors}")
+endif()
+file(WRITE "${OUTPUT_DIR}/program.c" "int main(void){if(!gfx_open(\"program graphics\",64,64))return 1;gfx_color(0,255,0,255);int result=gfx_point(8,8)&&gfx_present();gfx_close();return !result;}\n")
+execute_process(COMMAND "${PARSER}" --print-result --module "${MODULE}" --imports "${SOURCE_DIR}/examples/graphics/graphics.ls-h" "${OUTPUT_DIR}/program.c"
+    RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 10)
+string(REPLACE "\r\n" "\n" output "${output}")
+if(NOT status EQUAL 0 OR NOT output STREQUAL "Result: 0\n" OR NOT errors STREQUAL "")
+    message(FATAL_ERROR "Program graphics failed: ${status}\n${output}\n${errors}")
+endif()
