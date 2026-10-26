@@ -252,10 +252,10 @@ namespace mx {
             }
             LineReader reader;
             if (reader.interactive())
-                std::cout << "ls-c REPL. Enter C expressions, declarations, or functions. :help for commands.\n";
+                std::cout << "ls-C Interactive use C expressions, declarations, or functions. :help for commands.\n";
             std::string pending;
             for (;;) {
-                auto input = reader.read(pending.empty() ? ">>> " : "... ");
+                auto input = reader.read(pending.empty() ? "$> " : "... ");
                 if (input.status == InputStatus::End) {
                     if (!pending.empty()) {
                         std::cerr << "Error: incomplete input at end of session\n";
