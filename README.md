@@ -139,6 +139,18 @@ a trailing semicolon suppresses the value, and void calls print none. Declaratio
 can omit their final semicolon. Runtime initializers such as `double y=half(count)`
 are allowed in the REPL. Accepted initializers and earlier calls are never replayed.
 
+Statements such as `if`, `while`, `do`/`while`, `for`, and `switch`, blocks, and
+multiple statements per submission execute without displaying a result. They can
+update session variables and call functions. Variables declared inside a block or
+`for` loop stay local to it. Open a statement's `{` on its first line for multiline
+input, and keep `} else {` on the same line when entering an `if`/`else`:
+
+```c
+for (int i = 0; i < 3; ++i) {
+    if (i != 1) count += i;
+}
+```
+
 Use `:help`, `:quit`/`:exit`, `exit()`/`quit()`, `:reset` to clear the session, and
 `:cancel` to discard unfinished input. Ctrl-C cancels pending terminal input;
 Ctrl-D exits on Unix, and Ctrl-Z followed by Enter exits on Windows. Readline keeps

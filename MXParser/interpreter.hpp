@@ -84,7 +84,7 @@ namespace mx {
         Interpreter(const Interpreter &) = delete;
         Interpreter &operator=(const Interpreter &) = delete;
         void load(const ProgramNode &program);
-        /** Add interactive declarations or evaluate one expression, preserving prior objects and functions. */
+        /** Add interactive declarations, execute statements, or evaluate an expression, preserving prior objects and functions. */
         std::optional<std::string> submit(const std::string &source);
         ExecutionValue call(const std::string &name = "main", const std::vector<ExecutionValue> &arguments = {});
         /** Map an external C function prototype to a C++ callback. Registrations survive load().

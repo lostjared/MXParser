@@ -252,7 +252,7 @@ namespace mx {
             }
             LineReader reader;
             if (reader.interactive())
-                std::cout << "ls-C Interactive use C expressions, declarations, or functions. :help for commands.\n";
+                std::cout << "ls-C Interactive use C expressions, statements, declarations, or functions. :help for commands.\n";
             std::string pending;
             for (;;) {
                 auto input = reader.read(pending.empty() ? "$> " : "... ");
@@ -285,7 +285,7 @@ namespace mx {
                     continue;
                 }
                 if (command == ":help") {
-                    std::cout << ":quit / exit()  leave the REPL\n:reset          clear session state\n:cancel         discard incomplete input\nExpressions display their value; a trailing ; suppresses it.\nDeclare variables with C types and use (void) for parameterless functions.\n";
+                    std::cout << ":quit / exit()  leave the REPL\n:reset          clear session state\n:cancel         discard incomplete input\nExpressions display their value; a trailing ; suppresses it.\nStatements (if, while, for, switch, and blocks) execute without displaying a value.\nDeclare variables with C types and use (void) for parameterless functions.\n";
                     continue;
                 }
                 if (pending.empty() && command.empty())

@@ -1332,10 +1332,13 @@ namespace mx {
             verification.validate(*candidate, true);
             require(candidate->declarations.size() >= declaration_count, "interactive declaration history changed unexpectedly");
             candidate->declarations.erase(candidate->declarations.begin(), candidate->declarations.begin() + declaration_count);
-            FunctionNode *expression_function = nullptr;
+            FunctionNode *submission_function = nullptr;
+            bool expression = false;
             if (!declaration) {
-                expression_function = dynamic_cast<FunctionNode *>(candidate->declarations.back().get());
-                require(expression_function && expression_function->body && expression_function->body->statements.size() == 1 && dynamic_cast<ExprNode *>(expression_function->body->statements.front().get()), "REPL input must be one expression, declaration, or function definition");
+                submission_function = dynamic_cast<FunctionNode *>(candidate->declarations.back().get());
+                require(submission_function && submission_function->body, "REPL input must contain expressions, statements, declarations, or function definitions");
+                const auto &statements = submission_function->body->statements;
+                expression = statements.size() == 1 && dynamic_cast<ExprNode *>(statements.front().get());
             }
             auto accepted = candidate.get();
             check_native_definitions(*accepted);
@@ -1345,10 +1348,13 @@ namespace mx {
             session_source += "\n" + canonical;
             declaration_count += accepted->declarations.size();
             install(*accepted);
-            if (expression_function) {
-                auto result = query(*expression_function);
-                if (!suppress)
-                    return result;
+            if (submission_function) {
+                if (expression) {
+                    auto result = query(*submission_function);
+                    if (!suppress)
+                        return result;
+                } else
+                    invoke(query_name, {});
             }
             return {};
         }

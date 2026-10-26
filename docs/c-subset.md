@@ -745,7 +745,7 @@ result summary while retaining its existing intermediate-code and HTML output.
 
 ## Interactive execution
 
-`ls-c --repl` (also the no-argument invocation) provides a C-expression REPL.
+`ls-c --repl` (also the no-argument invocation) provides an interactive C REPL.
 Unix terminals use GNU Readline; Windows terminals use `ReadConsoleW` with cooked
 line editing, Unicode-to-UTF-8 conversion, and no Readline dependency. Redirected
 stdin uses line input without prompts on both platforms. Multiline bracketed input
@@ -753,20 +753,25 @@ and block comments use a continuation prompt; errors do not terminate the loop.
 Readline history is limited to 500 lines in memory. Commands include `:help`,
 `:quit`, `:exit`, `:reset`, and `:cancel`; `exit()` and `quit()` also exit.
 
-`Interpreter::submit(source)` accepts interactive declarations/functions or one
-expression, returning an optional display string. A final semicolon suppresses an
+`Interpreter::submit(source)` accepts interactive declarations/functions,
+statements, or an expression, returning an optional display string. A final semicolon suppresses an
 expression's display; void has no display. Numeric results retain their resolved
 signedness and width, pointers show virtual addresses, and structs have summaries.
 A function can be defined across lines by opening its brace on the first line.
+Statements include `if`/`else`, `while`, `do`/`while`, `for`, `switch`, and blocks;
+statement sequences execute without a display value. Block and loop declarations
+have normal local scope. For multiline statements, open the brace on the first
+line and enter `} else {` together when continuing an `if` with an `else`.
 `--repl filename` loads declarations and initializers without calling `main`.
 
 Submission parsing and a separate verification pass check the accepted source
 history plus the proposed input before extending the live semantic environment.
 Existing symbol identities, canonical tag layouts, globals, object references,
-and function bindings remain live. Only the new input's initializer or expression
+and function bindings remain live. Only the new input's initializer, expression, or statements
 executes: history is not replayed. Owned AST fragments keep expression facts valid
 until session replacement. An expression runs in a temporary frame so function
-calls and aggregate temporaries receive normal lifetime cleanup.
+calls and aggregate temporaries receive normal lifetime cleanup. Statements run
+through the normal function execution plan with scope cleanup and execution limits.
 
 Interactive global initializers can use runtime expressions/calls, unlike normal
 file-scope initializers. This relaxation is private to interactive analysis;
