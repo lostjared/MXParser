@@ -18,6 +18,9 @@ include(CMakePackageConfigHelpers)
 
 find_package(MXLex REQUIRED)
 find_packagE(Argz REQUIRED)
+option(WITH_NATIVE_MODULES "Enable shared-library imports using libffi" ON)
+option(WITH_SDL3_DEMO "Build the optional SDL3 graphics module" OFF)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 add_library(mxparser STATIC
     source/parser.cpp
@@ -27,10 +30,30 @@ add_library(mxparser STATIC
     source/functions.cpp
     source/type.cpp
     source/interpreter.cpp
+    source/native_module.cpp
     source/semantic.cpp
 )
 
 add_library(MXParser::mxparser ALIAS mxparser)
+target_link_libraries(mxparser PUBLIC MXLex::mxlex)
+if(WITH_NATIVE_MODULES)
+    find_package(LibFFI REQUIRED)
+    target_compile_definitions(mxparser PRIVATE MXPARSER_NATIVE_MODULES)
+    target_link_libraries(mxparser PRIVATE LibFFI::LibFFI ${CMAKE_DL_LIBS})
+    add_library(native-module-example SHARED examples/module.cpp)
+    mxparser_warnings(native-module-example)
+endif()
+
+if(WITH_SDL3_DEMO)
+    if(NOT WITH_NATIVE_MODULES)
+        message(FATAL_ERROR "WITH_SDL3_DEMO requires WITH_NATIVE_MODULES=ON")
+    endif()
+    find_package(SDL3 3.2 REQUIRED CONFIG)
+    add_library(ls-graphics SHARED examples/graphics/graphics.cpp)
+    target_compile_definitions(ls-graphics PRIVATE LS_GRAPHICS_BUILD)
+    target_link_libraries(ls-graphics PRIVATE SDL3::SDL3)
+    mxparser_warnings(ls-graphics)
+endif()
 
 target_include_directories(mxparser PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -101,10 +124,40 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/MXParserConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/mxparser
 )
+install(FILES cmake/FindLibFFI.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/mxparser)
 
 
 include(CTest)
 if(BUILD_TESTING)
+    if(WITH_SDL3_DEMO)
+        add_executable(graphics-tests tests/graphics.cpp)
+        target_link_libraries(graphics-tests PRIVATE mxparser SDL3::SDL3)
+        mxparser_warnings(graphics-tests)
+        add_test(NAME sdl3-graphics COMMAND graphics-tests $<TARGET_FILE:ls-graphics>
+            "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/examples/graphics/checker.bmp"
+            "${CMAKE_CURRENT_BINARY_DIR}/graphics-tests-data")
+        set_tests_properties(sdl3-graphics PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software" TIMEOUT 30)
+        add_test(NAME sdl3-graphics-cli COMMAND ${CMAKE_COMMAND}
+            "-DPARSER=$<TARGET_FILE:ls-c>" "-DMODULE=$<TARGET_FILE:ls-graphics>"
+            "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}" "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/graphics-cli"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/graphics-cli.cmake)
+        set_tests_properties(sdl3-graphics-cli PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software")
+    endif()
+    if(WITH_NATIVE_MODULES)
+        add_library(test-module SHARED tests/module.cpp)
+        mxparser_warnings(test-module)
+        add_executable(module-tests tests/modules.cpp)
+        target_link_libraries(module-tests PRIVATE mxparser MXLex::mxlex)
+        mxparser_warnings(module-tests)
+        add_test(NAME native-modules COMMAND module-tests $<TARGET_FILE:test-module> "${CMAKE_CURRENT_BINARY_DIR}/module-tests-data")
+        add_test(NAME native-modules-cli COMMAND ${CMAKE_COMMAND}
+            "-DPARSER=$<TARGET_FILE:ls-c>"
+            "-DMODULE=$<TARGET_FILE:test-module>"
+            "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/module-cli"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/modules-cli.cmake)
+    endif()
     add_executable(native-tests tests/native.cpp)
     target_link_libraries(native-tests PRIVATE mxparser MXLex::mxlex)
     mxparser_warnings(native-tests)

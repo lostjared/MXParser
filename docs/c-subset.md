@@ -647,8 +647,9 @@ access, null dereference, read-only writes, unrelated-array pointer subtraction,
 and incompatible representation access fail explicitly. Void/object-pointer
 round trips preserve identity. Casts do not widen a member pointer's bounds to a
 containing struct. Byte-level aliasing into other object representations,
-arbitrary host-address access, external libraries, dynamic
-allocation functions, and linking are unsupported. This interpreter does not
+arbitrary host-address access, dynamic allocation functions, and C linking are
+unsupported. External C functions can be explicitly bound through shared-library
+imports as described below. This interpreter does not
 prove or diagnose every C undefined behavior (including unsequenced access,
 restrict violations, and all effective-type rules).
 
@@ -666,6 +667,31 @@ recursion depth (256), and maximum single object size (1 MiB). Expired object
 metadata is retained until program replacement for reliable dangling-pointer
 checks. `ExecutionException` carries runtime source locations; validation still
 uses `SemanticException`.
+
+`Interpreter::import_module(module_path, declarations_path)` reads `.ls-h` text
+files containing `__import__ return_type name(parameters);` declarations and binds
+the matching exported C symbols using libffi and the platform loader. No module
+path is embedded in the header; the API or REPL `:import "module" "header.ls-h"`
+selects the library. Import headers allow comments and multiline prototypes, but
+no definitions, typedefs, storage specifiers, or ordinary declarations. Empty `()`
+imports are normalized to `(void)`. Filenames can use any extension.
+
+Numeric scalar arguments/results, void results, and non-null `const char *` input
+strings are supported. Host scalar ABI widths are used at the native boundary;
+interpreter values are range-checked before conversion. Strings are temporary
+copies valid for the call. Writable pointers, pointer returns, structs, variadics,
+and native callbacks into interpreted code are unsupported. Prototypes must match
+the library's exported C ABI. Limits and cancellation do not preempt native calls.
+Import validation and symbol resolution complete before prototypes/registrations
+are committed. Imports retain library handles, persist across `load()` (which
+injects their declarations before validation), and reject incompatible function
+prototypes. Resetting or destroying the interpreter releases its imports.
+
+`ls-c --run-program program.c --module library-path --imports header.ls-h`
+imports the library before validating/loading the program. `--print-result` and
+`--repl` accept the same paired options (`-m`/`-H`), including REPL preloads.
+The optional `WITH_SDL3_DEMO` target, `ls-graphics`, demonstrates this interface
+with SDL3 drawing and events; see `examples/graphics/README.md`.
 
 ICode/HTML now emit numeric `do`/`while`, switch dispatch, case/default labels,
 fallthrough, and separate break/continue targets. They remain illustrative output,

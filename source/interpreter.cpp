@@ -1,6 +1,7 @@
 #include "MXParser/interpreter.hpp"
 #include "MXParser/parser.hpp"
 #include "arithmetic.hpp"
+#include "native_module.hpp"
 #include <algorithm>
 #include <bit>
 #include <charconv>
@@ -155,6 +156,8 @@ namespace mx {
     struct Interpreter::Implementation {
         SemanticAnalyzer analyzer;
         std::unordered_map<std::string, NativeCallback> callbacks;
+        std::unordered_map<std::string, TypePtr> imported_signatures;
+        std::string imported_source;
         std::function<bool()> interrupt_handler;
         bool in_callback = false;
         ExecutionLimits limits;
@@ -283,6 +286,8 @@ namespace mx {
                 signature = symbol->type;
             }
             signature = bare(signature);
+            if (auto imported = imported_signatures.find(name); imported != imported_signatures.end())
+                require(signature->equals(*imported->second), "module function prototype does not match imported signature: " + name);
             require(signature->has_prototype, "native function requires a C prototype: " + name);
             require(arguments.size() == signature->parameters.size(), "wrong argument count for " + name);
             require(bare(signature->element)->kind == K::Scalar, "native callbacks return scalars or void only");
@@ -1241,6 +1246,7 @@ namespace mx {
         void load(const ProgramNode &program) {
             remaining = limits.instructions;
             analyzer.validate(program);
+            check_import_signatures(analyzer);
             install(program);
             session_source = program.to_string();
             declaration_count = program.declarations.size();
@@ -1332,6 +1338,7 @@ namespace mx {
             auto candidate = parser.parse_program();
             SemanticAnalyzer verification;
             verification.validate(*candidate, true);
+            check_import_signatures(verification);
             require(candidate->declarations.size() >= declaration_count, "interactive declaration history changed unexpectedly");
             candidate->declarations.erase(candidate->declarations.begin(), candidate->declarations.begin() + declaration_count);
             FunctionNode *submission_function = nullptr;
@@ -1360,6 +1367,11 @@ namespace mx {
             }
             return {};
         }
+        void check_import_signatures(const SemanticAnalyzer &environment) {
+            for (const auto &[name, signature] : imported_signatures)
+                if (auto symbol = environment.symbols().lookup(name))
+                    require(symbol->kind == SemanticSymbolKind::Function && symbol->type->equals(*signature), "module function prototype does not match imported signature: " + name);
+        }
     };
     ExecutionException::ExecutionException(const std::string &message, SourceLocation location) : std::runtime_error(SemanticException(message, location).what()), location(std::move(location)) {}
     Interpreter::Interpreter(ExecutionLimits limits) : implementation(std::make_unique<Implementation>(limits)), limits(limits) {}
@@ -1368,8 +1380,19 @@ namespace mx {
         implementation->require(!implementation->in_callback, "cannot reenter interpreter from native callback");
         auto next = std::make_unique<Implementation>(limits);
         next->callbacks = implementation->callbacks;
+        next->imported_signatures = implementation->imported_signatures;
+        next->imported_source = implementation->imported_source;
         next->interrupt_handler = implementation->interrupt_handler;
-        next->load(program);
+        if (next->imported_source.empty())
+            next->load(program);
+        else {
+            std::istringstream source(next->imported_source + "\n" + program.to_string());
+            Parser parser(source);
+            auto owned = parser.parse_program();
+            auto accepted = owned.get();
+            next->submissions.push_back(std::move(owned));
+            next->load(*accepted);
+        }
         implementation = std::move(next);
     }
     std::optional<std::string> Interpreter::submit(const std::string &source) {
@@ -1379,6 +1402,22 @@ namespace mx {
     void Interpreter::set_interrupt_handler(std::function<bool()> handler) {
         implementation->require(!implementation->in_callback, "cannot reenter interpreter from native callback");
         implementation->interrupt_handler = std::move(handler);
+    }
+    void Interpreter::import_module(const std::string &module_path, const std::string &declarations_path) {
+        auto &runtime = *implementation;
+        runtime.require(!runtime.in_callback, "cannot reenter interpreter from native callback");
+        auto imports = load_native_module(module_path, declarations_path);
+        for (const auto &function : imports.functions) {
+            runtime.require(function.name != "lsprintf", "invalid or reserved native function name");
+            runtime.require(!runtime.callbacks.contains(function.name), "native function already registered: " + function.name);
+            runtime.require(!runtime.functions.contains(function.name), "native callback conflicts with C definition: " + function.name);
+        }
+        runtime.submit(imports.declarations);
+        for (auto &function : imports.functions) {
+            runtime.imported_signatures.emplace(function.name, std::move(function.signature));
+            runtime.callbacks.emplace(function.name, std::move(function.callback));
+        }
+        runtime.imported_source += "\n" + imports.declarations;
     }
     void Interpreter::register_function(const std::string &name, NativeCallback callback) {
         auto &runtime = *implementation;

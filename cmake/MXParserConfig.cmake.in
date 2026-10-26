@@ -1,0 +1,10 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(MXLex REQUIRED)
+if(@WITH_NATIVE_MODULES@)
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
+    find_dependency(LibFFI REQUIRED)
+endif()
+include("${CMAKE_CURRENT_LIST_DIR}/mxparserTargets.cmake")
+check_required_components(MXParser)

@@ -4,9 +4,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -241,7 +243,7 @@ namespace mx {
             return text.substr(first, text.find_last_not_of(" \t\r\n") - first + 1);
         }
     } // namespace
-    int run_repl(const char *filename) {
+    int run_repl(const char *filename, const char *module_path, const char *imports_path) {
         try {
             LineReader reader;
             auto make_interpreter = [] {
@@ -250,6 +252,8 @@ namespace mx {
                 return interpreter;
             };
             auto interpreter = make_interpreter();
+            if (module_path && imports_path)
+                interpreter->import_module(module_path, imports_path);
             if (filename) {
                 std::ifstream input(filename);
                 if (!input)
@@ -289,8 +293,22 @@ namespace mx {
                     pending.clear();
                     continue;
                 }
+                if (command == ":import" || command.starts_with(":import ") || command.starts_with(":import\t")) {
+                    std::istringstream arguments(command.substr(7));
+                    std::string module_path, declarations_path, extra;
+                    if (!(arguments >> std::quoted(module_path, '"', '\0') >> std::quoted(declarations_path, '"', '\0')) || (arguments >> extra)) {
+                        std::cerr << "Error: usage: :import \"library-path\" \"declarations-file\"\n";
+                        continue;
+                    }
+                    try {
+                        interpreter->import_module(module_path, declarations_path);
+                    } catch (const std::exception &error) {
+                        std::cerr << "Error: " << error.what() << '\n';
+                    }
+                    continue;
+                }
                 if (command == ":help") {
-                    std::cout << ":quit / exit()  leave the REPL\n:reset          clear session state\n:cancel         discard incomplete input\nExpressions display their value; a trailing ; suppresses it.\nStatements (if, while, for, switch, and blocks) execute without displaying a value.\nAt the ... prompt, enter a blank line to submit complete code.\nDeclare variables with C types and use (void) for parameterless functions.\n";
+                    std::cout << ":quit / exit()  leave the REPL\n:reset          clear session state\n:cancel         discard incomplete input\n:import \"library-path\" \"declarations-file\"  load __import__ function prototypes\nExpressions display their value; a trailing ; suppresses it.\nStatements (if, while, for, switch, and blocks) execute without displaying a value.\nAt the ... prompt, enter a blank line to submit complete code.\nDeclare variables with C types and use (void) for parameterless functions.\n";
                     continue;
                 }
                 if (pending.empty() && command.empty())

@@ -9,6 +9,9 @@ MXParser is a simple C++23 parser built on MXLex.
 - Pcons through [uv](https://docs.astral.sh/uv/), or CMake 3.10+
 - GNU Readline development headers/library on Unix-like systems (`readline-devel`
   or `libreadline-dev`); Windows uses its native console API and needs no Readline
+- libffi development headers/library for native module imports (`libffi-devel`
+  or `libffi-dev`). Disable this feature with CMake `-DWITH_NATIVE_MODULES=OFF`
+  or Pcons `WITH_NATIVE_MODULES=0` if it is not needed.
 
 MXParser consumes installed dependencies and does not require their source
 repositories to be adjacent to the MXParser checkout. Standard prefixes such
@@ -100,6 +103,8 @@ cmake --build build/cmake
 | `-p` | `--print-result` | Execute `main` and print its result |
 | `-i` | `--repl` | Start the REPL, optionally preloading a file |
 | `-f filename` | `--file filename` | Select the input file |
+| `-m library` | `--module library` | Load a native library for execution or the REPL; pair with `--imports` |
+| `-H header.ls-h` | `--imports header.ls-h` | Import the native library's function declarations |
 
 Choose one mode. A filename can also be positional, so `ls-c -r example.c`
 and `ls-c --run-program --file example.c` are equivalent. Options may appear
@@ -361,6 +366,66 @@ and the combined example, both original and printed, with
 `-std=c99 -pedantic-errors -fsyntax-only`. Set `MXPARSER_C99_COMPILER` at CMake
 configuration time to select a compiler; configuration reports when this optional
 comparison cannot be registered. The comparison does not link or execute C.
+
+## Shared-library imports
+
+An `.ls-h` import file lists exported C functions using `__import__`:
+
+```c
+__import__ int add(int left, int right);
+__import__ double scale(double value, double factor);
+__import__ int string_length(const char *text);
+```
+
+Build the example library with CMake, then import its declarations in the REPL:
+
+```text
+$> :import "./build/repl-statements/libnative-module-example.so" "examples/module.ls-h"
+$> add(20, 22)
+42
+$> scale(3.0, 2.5)
+7.5
+$> string_length("hello")
+5
+```
+
+Use the path for your build directory. macOS libraries normally end in `.dylib`;
+Windows uses `.dll` (the example is `native-module-example.dll`). Paths are relative
+to the current working directory; quotes allow spaces. The declaration file is
+plain text with one `__import__` prototype per declaration, ending in `;`. Comments
+and multiline prototypes are accepted. `.ls-h` is the conventional extension;
+the loader does not enforce an extension. In import files, `function()` means
+`function(void)`.
+
+From C++, use the same loader before submitting code or loading a program:
+
+```cpp
+mx::Interpreter interpreter;
+interpreter.import_module("./libnative-module-example.so", "examples/module.ls-h");
+auto result = interpreter.submit("add(20, 22)"); // "42"
+```
+
+Imports make their prototypes available immediately and survive `load()`. `:reset`
+clears them. Missing libraries/symbols, duplicate registrations, and unsupported
+signatures report errors without registering any functions from that import.
+Library handles stay alive as long as their registered functions.
+
+Supported signatures use numeric arguments/results, `void` results, and non-null
+`const char *` input strings. Strings are copied for the duration of the call and
+must not be retained by native code. Writable pointers, pointer results, structs,
+variadics, and callbacks are rejected. Prototypes must match the library's exported
+C ABI exactly; C++ exports need `extern "C"` and Windows exports use the default C
+calling convention. Host `long` widths apply at the native boundary, with range
+checks when converting interpreter values. Interpreter instruction limits and
+Ctrl-C polling apply to interpreted execution; native calls run until they return.
+Calls use [libffi's runtime calling interface](https://github.com/libffi/libffi/blob/master/doc/libffi.texi).
+
+The optional [SDL3 graphics demo](examples/graphics/README.md) provides a window,
+persistent drawing canvas, colored points/rectangles, images, text, and simple
+keyboard/mouse/quit events through `graphics.ls-h`. Build it with
+`-DWITH_SDL3_DEMO=ON`. To load a module when running a regular program, pass
+`--module library-path --imports header.ls-h` alongside `--run-program` or
+`--print-result`. Those options also work with `--repl`, including preloaded code.
 
 ## Validated execution
 

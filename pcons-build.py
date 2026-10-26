@@ -117,6 +117,10 @@ def find_argz():
 
 mxlex = find_mxlex()
 argz = find_argz()
+native_modules = option("WITH_NATIVE_MODULES", default=True)
+if native_modules:
+    env.cxx.flags.append("-DMXPARSER_NATIVE_MODULES")
+    libffi = project.find_package("libffi", required=True)
 
 mxparser = project.StaticLibrary(
     "mxparser",
@@ -130,10 +134,15 @@ mxparser = project.StaticLibrary(
         project_dir / "source" / "type.cpp",
         project_dir / "source" / "semantic.cpp",
         project_dir / "source" / "interpreter.cpp",
+        project_dir / "source" / "native_module.cpp",
     ],
 )
 mxparser.public.include_dirs.append(project_dir)
 mxparser.link(mxlex)
+if native_modules:
+    mxparser.link(libffi)
+    if platform.is_linux:
+        mxparser.link(ImportedTarget.from_package(PackageDescription(name="dl", libraries=["dl"])))
 
 if option("PROGRAMS", default=True):
     test_parser = project.Program(
@@ -168,8 +177,9 @@ write_file(
     "Name: mxparser\n"
     "Description: C++23 parser library\n"
     f"Version: {VERSION}\n"
-    "Requires: mxlex\n"
+    f"Requires: mxlex{' libffi' if native_modules else ''}\n"
     "Libs: -L${libdir} -lmxparser\n"
+    f"Libs.private: {'-ldl' if native_modules and platform.is_linux else ''}\n"
     "Cflags: -I${includedir}\n",
 )
 public_headers = sorted((project_dir / "MXParser").glob("*.hpp"))

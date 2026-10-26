@@ -21,15 +21,18 @@ int main(int argc, char **argv) {
     add_flag('p', "print-result", "Execute main and also print its result");
     add_flag('i', "repl", "Start the REPL, optionally preloading a file");
     arguments.addOptionSingleValue('f', "Input filename").addOptionDoubleValue('f' + 256, "file", "Input filename");
+    arguments.addOptionSingleValue('m', "Native shared-library path").addOptionDoubleValue('m' + 256, "module", "Native shared-library path");
+    arguments.addOptionSingleValue('H', "Native import header (.ls-h)").addOptionDoubleValue('H' + 256, "imports", "Native import header (.ls-h)");
 
     auto usage = [&](std::ostream &output) {
-        output << "Usage: " << argv[0] << " [mode] [-f filename | filename]\n"
+        output << "Usage: " << argv[0] << " [mode] [-f filename | filename] [--module library --imports header.ls-h]\n"
                << "Without arguments, starts the REPL. File modes require a filename.\n"
                << "Select one mode; --repl accepts an optional preload filename.\n";
         arguments.help(output);
     };
     char mode = 0;
     std::string input_filename;
+    std::string module_path, imports_path;
     bool has_filename = false;
     bool help = false;
     try {
@@ -47,6 +50,13 @@ int main(int argc, char **argv) {
                 has_filename = true;
                 if (input_filename.empty())
                     throw std::runtime_error("Input filename must not be empty");
+            } else if (code == 'm' || code == 'H') {
+                auto &path = code == 'm' ? module_path : imports_path;
+                if (!path.empty())
+                    throw std::runtime_error("Specify only one native module and import header");
+                path = argument.arg_value;
+                if (path.empty())
+                    throw std::runtime_error("Native module and import header paths must not be empty");
             } else {
                 if (mode != 0 && mode != code)
                     throw std::runtime_error("Select only one mode");
@@ -59,6 +69,10 @@ int main(int argc, char **argv) {
         }
         if (mode != 0 && mode != 'i' && !has_filename)
             throw std::runtime_error("This mode requires an input filename");
+        if (module_path.empty() != imports_path.empty())
+            throw std::runtime_error("Use --module and --imports together");
+        if (!module_path.empty() && mode != 'i' && mode != 'r' && mode != 'p' && !(mode == 0 && !has_filename))
+            throw std::runtime_error("Native imports require --repl, --run-program, or --print-result");
     } catch (const ArgException<std::string> &error) {
         std::cerr << error.text() << '\n';
         usage(std::cerr);
@@ -70,7 +84,7 @@ int main(int argc, char **argv) {
     }
 
     if (mode == 'i' || (mode == 0 && !has_filename))
-        return mx::run_repl(has_filename ? input_filename.c_str() : nullptr);
+        return mx::run_repl(has_filename ? input_filename.c_str() : nullptr, module_path.empty() ? nullptr : module_path.c_str(), imports_path.empty() ? nullptr : imports_path.c_str());
 
     bool syntax_only = mode == 's';
     bool syntax_program = mode == 'S';
@@ -90,6 +104,8 @@ int main(int argc, char **argv) {
         if (run_program) {
             auto program = parser.parse_program();
             mx::Interpreter interpreter;
+            if (!module_path.empty())
+                interpreter.import_module(module_path, imports_path);
             interpreter.load(*program);
             auto result = interpreter.call();
             if (print_result) {

@@ -89,6 +89,8 @@ namespace mx {
         ExecutionValue call(const std::string &name = "main", const std::vector<ExecutionValue> &arguments = {});
         /** Poll for cancellation during execution. Returning true interrupts execution with normal scope cleanup. Survives load(). */
         void set_interrupt_handler(std::function<bool()> handler);
+        /** Load __import__ prototypes from a text file and bind exported C symbols from a shared library. Imports survive load(). */
+        void import_module(const std::string &module_path, const std::string &declarations_path);
         /** Map an external C function prototype to a C++ callback. Registrations survive load().
          * Parameters use C value semantics; pointer views can modify interpreter objects.
          * Return a scalar or monostate for void. Reentering this interpreter is unsupported.

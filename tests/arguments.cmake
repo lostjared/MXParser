@@ -37,7 +37,7 @@ foreach(pair IN ITEMS "s;syntax" "S;syntax-program" "c;check-program" "r;run-pro
     endforeach()
 endforeach()
 
-foreach(args IN ITEMS "--unknown" "-x" "-f" "--file" "--file=" "--run-program" "-s" "-r;-c;program.c" "program.c;expression.c" "-f;program.c;program.c" "--repl=value")
+foreach(args IN ITEMS "--unknown" "-x" "-f" "--file" "--file=" "--run-program" "-s" "-r;-c;program.c" "program.c;expression.c" "-f;program.c;program.c" "--repl=value" "--module;module.so" "--imports;header.ls-h" "--module=" "--imports=" "--module;module.so;--imports;header.ls-h;--syntax-program;program.c" "--module;a.so;--module;b.so;--imports;header.ls-h" "--module;a.so;--imports;a.ls-h;--imports;b.ls-h")
     execute_process(COMMAND "${PARSER}" ${args} WORKING_DIRECTORY "${OUTPUT_DIR}"
         RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 10)
     if(status EQUAL 0 OR errors STREQUAL "")
