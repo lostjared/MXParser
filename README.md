@@ -88,6 +88,24 @@ cmake --build build/cmake
 
 ## Interactive REPL
 
+`ls-c` uses Argz for command-line options. Long and short names are equivalent:
+
+| Short | Long | Action |
+|-------|------|--------|
+| `-h` | `--help` | Show usage and options |
+| `-s` | `--syntax` | Print expression syntax |
+| `-S` | `--syntax-program` | Print translation-unit syntax |
+| `-c` | `--check-program` | Validate a translation unit |
+| `-r` | `--run-program` | Execute `main` |
+| `-p` | `--print-result` | Execute `main` and print its result |
+| `-i` | `--repl` | Start the REPL, optionally preloading a file |
+| `-f filename` | `--file filename` | Select the input file |
+
+Choose one mode. A filename can also be positional, so `ls-c -r example.c`
+and `ls-c --run-program --file example.c` are equivalent. Options may appear
+before or after the filename. Use `--` before a positional filename beginning
+with `-`. A filename without a mode keeps the legacy expression demo behavior.
+
 Start an interactive session with GNU Readline editing/history on Unix, or native
 Windows console line editing on Windows:
 

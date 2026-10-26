@@ -147,7 +147,7 @@ if option("PROGRAMS", default=True):
     )
     test_parser.link(mxparser)
     parser_test.link(mxparser, argz)
-    parse_expr.link(mxparser)
+    parse_expr.link(mxparser, argz)
     if os.name != "nt":
         readline = project.find_package("readline", required=True)
         parse_expr.link(readline)

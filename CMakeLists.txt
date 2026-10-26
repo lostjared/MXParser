@@ -117,6 +117,10 @@ if(BUILD_TESTING)
             set_tests_properties(repl-terminal PROPERTIES TIMEOUT 30)
         endif()
     endif()
+    add_test(NAME cli-arguments COMMAND ${CMAKE_COMMAND}
+        "-DPARSER=$<TARGET_FILE:ls-c>"
+        "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/cli-arguments"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/arguments.cmake)
     add_test(NAME repl-cli COMMAND ${CMAKE_COMMAND}
         "-DPARSER=$<TARGET_FILE:ls-c>"
         "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/repl-cli"

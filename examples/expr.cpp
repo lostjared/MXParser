@@ -1,4 +1,5 @@
 #include "repl.hpp"
+#include <Argz/argz.hpp>
 #include <MXParser/ast.hpp>
 #include <MXParser/interpreter.hpp>
 #include <MXParser/parser.hpp>
@@ -10,20 +11,73 @@
 #include <type_traits>
 
 int main(int argc, char **argv) {
-    if (argc == 1 || ((argc == 2 || argc == 3) && std::string(argv[1]) == "--repl"))
-        return mx::run_repl(argc == 3 ? argv[2] : nullptr);
+    Argz<std::string> arguments(argc, argv);
+    auto add_flag = [&](char code, const std::string &name, const std::string &description) { arguments.addOptionSingle(code, description).addOptionDouble(code + 256, name, description); };
+    add_flag('h', "help", "Show usage and options");
+    add_flag('s', "syntax", "Print expression syntax");
+    add_flag('S', "syntax-program", "Print translation-unit syntax");
+    add_flag('c', "check-program", "Validate a translation unit");
+    add_flag('r', "run-program", "Execute main and print program output");
+    add_flag('p', "print-result", "Execute main and also print its result");
+    add_flag('i', "repl", "Start the REPL, optionally preloading a file");
+    arguments.addOptionSingleValue('f', "Input filename").addOptionDoubleValue('f' + 256, "file", "Input filename");
 
-    bool syntax_only = argc == 3 && std::string(argv[1]) == "--syntax";
-    bool syntax_program = argc == 3 && std::string(argv[1]) == "--syntax-program";
-    bool print_result = argc == 3 && std::string(argv[1]) == "--print-result";
-    bool run_program = print_result || (argc == 3 && std::string(argv[1]) == "--run-program");
-    bool check_program = argc == 3 && std::string(argv[1]) == "--check-program";
-    if (argc != 2 && !syntax_only && !syntax_program && !check_program && !run_program) {
-        std::cerr << "Program requires one argument:\n" << argv[0] << " [--syntax | --syntax-program | --check-program | --run-program | --print-result] filename\n       --repl [filename]\n";
+    auto usage = [&](std::ostream &output) {
+        output << "Usage: " << argv[0] << " [mode] [-f filename | filename]\n"
+               << "Without arguments, starts the REPL. File modes require a filename.\n"
+               << "Select one mode; --repl accepts an optional preload filename.\n";
+        arguments.help(output);
+    };
+    char mode = 0;
+    std::string input_filename;
+    bool has_filename = false;
+    bool help = false;
+    try {
+        Argument<std::string> argument;
+        int code;
+        while ((code = arguments.proc(argument)) != -1) {
+            if (code >= 256)
+                code -= 256;
+            if (code == 'h') {
+                help = true;
+            } else if (code == '-' || code == 'f') {
+                if (has_filename)
+                    throw std::runtime_error("Specify only one input filename");
+                input_filename = argument.arg_value;
+                has_filename = true;
+                if (input_filename.empty())
+                    throw std::runtime_error("Input filename must not be empty");
+            } else {
+                if (mode != 0 && mode != code)
+                    throw std::runtime_error("Select only one mode");
+                mode = static_cast<char>(code);
+            }
+        }
+        if (help) {
+            usage(std::cout);
+            return EXIT_SUCCESS;
+        }
+        if (mode != 0 && mode != 'i' && !has_filename)
+            throw std::runtime_error("This mode requires an input filename");
+    } catch (const ArgException<std::string> &error) {
+        std::cerr << error.text() << '\n';
+        usage(std::cerr);
+        return EXIT_FAILURE;
+    } catch (const std::runtime_error &error) {
+        std::cerr << "Argument error: " << error.what() << '\n';
+        usage(std::cerr);
         return EXIT_FAILURE;
     }
 
-    const char *filename = argv[(syntax_only || syntax_program || check_program || run_program) ? 2 : 1];
+    if (mode == 'i' || (mode == 0 && !has_filename))
+        return mx::run_repl(has_filename ? input_filename.c_str() : nullptr);
+
+    bool syntax_only = mode == 's';
+    bool syntax_program = mode == 'S';
+    bool print_result = mode == 'p';
+    bool run_program = mode == 'r' || print_result;
+    bool check_program = mode == 'c';
+    const char *filename = input_filename.c_str();
     std::fstream file;
     file.open(filename, std::ios::in);
     if (!file.is_open()) {
