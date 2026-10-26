@@ -285,13 +285,14 @@ namespace mx {
                     continue;
                 }
                 if (command == ":help") {
-                    std::cout << ":quit / exit()  leave the REPL\n:reset          clear session state\n:cancel         discard incomplete input\nExpressions display their value; a trailing ; suppresses it.\nStatements (if, while, for, switch, and blocks) execute without displaying a value.\nDeclare variables with C types and use (void) for parameterless functions.\n";
+                    std::cout << ":quit / exit()  leave the REPL\n:reset          clear session state\n:cancel         discard incomplete input\nExpressions display their value; a trailing ; suppresses it.\nStatements (if, while, for, switch, and blocks) execute without displaying a value.\nAt the ... prompt, enter a blank line to submit complete code.\nDeclare variables with C types and use (void) for parameterless functions.\n";
                     continue;
                 }
                 if (pending.empty() && command.empty())
                     continue;
+                bool continuing = !pending.empty();
                 pending += input.text + '\n';
-                if (needs_more(pending))
+                if (needs_more(pending) || (continuing && !command.empty()))
                     continue;
                 try {
                     if (auto result = interpreter->submit(pending))

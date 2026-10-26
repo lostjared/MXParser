@@ -123,6 +123,7 @@ Windows console line editing on Windows:
 >>> double half(double x) {
 ...     return x / 2.0;
 ... }
+...
 >>> half(count)
 3
 >>> lsprintf("count=%d\n", count);
@@ -134,7 +135,9 @@ Variables, typedefs, structs/enums, functions, and side effects persist. Declare
 variables using C types; function definitions follow the existing C subset and
 use `(void)` for no parameters. Open a function's `{` on its first line to enter
 a multiline definition. Parentheses, brackets, braces, and block comments produce
-`...` continuation prompts. Expressions print bare values (without `Result:`);
+`...` continuation prompts. Once at `...`, enter a blank line after completing the
+code to submit it. Blank lines inside unclosed brackets or block comments keep
+collecting input. Expressions print bare values (without `Result:`);
 a trailing semicolon suppresses the value, and void calls print none. Declarations
 can omit their final semicolon. Runtime initializers such as `double y=half(count)`
 are allowed in the REPL. Accepted initializers and earlier calls are never replayed.
@@ -143,7 +146,8 @@ Statements such as `if`, `while`, `do`/`while`, `for`, and `switch`, blocks, and
 multiple statements per submission execute without displaying a result. They can
 update session variables and call functions. Variables declared inside a block or
 `for` loop stay local to it. Open a statement's `{` on its first line for multiline
-input, and keep `} else {` on the same line when entering an `if`/`else`:
+input, then enter a blank line to submit it. You can put `else` on a new line after
+`}`, and add more statements before the blank line:
 
 ```c
 for (int i = 0; i < 3; ++i) {

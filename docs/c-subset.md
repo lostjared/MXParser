@@ -749,7 +749,9 @@ result summary while retaining its existing intermediate-code and HTML output.
 Unix terminals use GNU Readline; Windows terminals use `ReadConsoleW` with cooked
 line editing, Unicode-to-UTF-8 conversion, and no Readline dependency. Redirected
 stdin uses line input without prompts on both platforms. Multiline bracketed input
-and block comments use a continuation prompt; errors do not terminate the loop.
+and block comments use a continuation prompt. Once in continuation mode, a blank
+line submits the code when brackets and block comments are closed; otherwise it
+continues collecting input. Errors do not terminate the loop.
 Readline history is limited to 500 lines in memory. Commands include `:help`,
 `:quit`, `:exit`, `:reset`, and `:cancel`; `exit()` and `quit()` also exit.
 
@@ -761,7 +763,8 @@ A function can be defined across lines by opening its brace on the first line.
 Statements include `if`/`else`, `while`, `do`/`while`, `for`, `switch`, and blocks;
 statement sequences execute without a display value. Block and loop declarations
 have normal local scope. For multiline statements, open the brace on the first
-line and enter `} else {` together when continuing an `if` with an `else`.
+line. Closing it keeps the continuation prompt active so `else` and additional
+statements can follow on new lines. Enter a blank line to submit the complete code.
 `--repl filename` loads declarations and initializers without calling `main`.
 
 Submission parsing and a separate verification pass check the accepted source
