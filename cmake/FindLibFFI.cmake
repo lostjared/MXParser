@@ -1,0 +1,15 @@
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(PC_LIBFFI QUIET libffi)
+endif()
+find_path(LibFFI_INCLUDE_DIR NAMES ffi.h HINTS ${PC_LIBFFI_INCLUDE_DIRS})
+find_library(LibFFI_LIBRARY NAMES ffi libffi HINTS ${PC_LIBFFI_LIBRARY_DIRS})
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(LibFFI REQUIRED_VARS LibFFI_LIBRARY LibFFI_INCLUDE_DIR)
+if(LibFFI_FOUND AND NOT TARGET LibFFI::LibFFI)
+    add_library(LibFFI::LibFFI UNKNOWN IMPORTED)
+    set_target_properties(LibFFI::LibFFI PROPERTIES
+        IMPORTED_LOCATION "${LibFFI_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${LibFFI_INCLUDE_DIR}")
+endif()
+mark_as_advanced(LibFFI_INCLUDE_DIR LibFFI_LIBRARY)
