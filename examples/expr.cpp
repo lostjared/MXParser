@@ -4,6 +4,7 @@
 #include <MXParser/interpreter.hpp>
 #include <MXParser/parser.hpp>
 #include <MXParser/semantic.hpp>
+#include <charconv>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -23,6 +24,7 @@ int main(int argc, char **argv) {
     arguments.addOptionSingleValue('f', "Input filename").addOptionDoubleValue('f' + 256, "file", "Input filename");
     arguments.addOptionSingleValue('m', "Native shared-library path").addOptionDoubleValue('m' + 256, "module", "Native shared-library path");
     arguments.addOptionSingleValue('H', "Native import header (.ls-h)").addOptionDoubleValue('H' + 256, "imports", "Native import header (.ls-h)");
+    arguments.addOptionSingleValue('n', "Instruction budget; 0 disables it").addOptionDoubleValue('n' + 256, "instructions", "Instruction budget; 0 disables it");
 
     auto usage = [&](std::ostream &output) {
         output << "Usage: " << argv[0] << " [mode] [-f filename | filename] [--module library --imports header.ls-h]\n"
@@ -34,6 +36,8 @@ int main(int argc, char **argv) {
     std::string input_filename;
     std::string module_path, imports_path;
     bool has_filename = false;
+    bool has_instructions = false;
+    mx::ExecutionLimits limits;
     bool help = false;
     try {
         Argument<std::string> argument;
@@ -50,6 +54,14 @@ int main(int argc, char **argv) {
                 has_filename = true;
                 if (input_filename.empty())
                     throw std::runtime_error("Input filename must not be empty");
+            } else if (code == 'n') {
+                if (has_instructions)
+                    throw std::runtime_error("Specify only one instruction budget");
+                const auto &text = argument.arg_value;
+                auto result = std::from_chars(text.data(), text.data() + text.size(), limits.instructions);
+                if (text.empty() || result.ec != std::errc{} || result.ptr != text.data() + text.size())
+                    throw std::runtime_error("Instruction budget must be a nonnegative integer");
+                has_instructions = true;
             } else if (code == 'm' || code == 'H') {
                 auto &path = code == 'm' ? module_path : imports_path;
                 if (!path.empty())
@@ -71,8 +83,8 @@ int main(int argc, char **argv) {
             throw std::runtime_error("This mode requires an input filename");
         if (module_path.empty() != imports_path.empty())
             throw std::runtime_error("Use --module and --imports together");
-        if (!module_path.empty() && mode != 'i' && mode != 'r' && mode != 'p' && !(mode == 0 && !has_filename))
-            throw std::runtime_error("Native imports require --repl, --run-program, or --print-result");
+        if ((!module_path.empty() || has_instructions) && mode != 'i' && mode != 'r' && mode != 'p' && !(mode == 0 && !has_filename))
+            throw std::runtime_error("Native imports and instruction budgets require --repl, --run-program, or --print-result");
     } catch (const ArgException<std::string> &error) {
         std::cerr << error.text() << '\n';
         usage(std::cerr);
@@ -84,7 +96,7 @@ int main(int argc, char **argv) {
     }
 
     if (mode == 'i' || (mode == 0 && !has_filename))
-        return mx::run_repl(has_filename ? input_filename.c_str() : nullptr, module_path.empty() ? nullptr : module_path.c_str(), imports_path.empty() ? nullptr : imports_path.c_str());
+        return mx::run_repl(has_filename ? input_filename.c_str() : nullptr, module_path.empty() ? nullptr : module_path.c_str(), imports_path.empty() ? nullptr : imports_path.c_str(), limits);
 
     bool syntax_only = mode == 's';
     bool syntax_program = mode == 'S';
@@ -103,7 +115,7 @@ int main(int argc, char **argv) {
         mx::Parser parser(file);
         if (run_program) {
             auto program = parser.parse_program();
-            mx::Interpreter interpreter;
+            mx::Interpreter interpreter(limits);
             if (!module_path.empty())
                 interpreter.import_module(module_path, imports_path);
             interpreter.load(*program);

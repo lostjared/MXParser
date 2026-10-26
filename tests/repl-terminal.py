@@ -16,7 +16,7 @@ def setup_terminal():
     fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
 
 environment = dict(os.environ, INPUTRC=os.devnull, TERM="xterm")
-process = subprocess.Popen([sys.argv[1], "--repl"], stdin=slave, stdout=slave,
+process = subprocess.Popen([sys.argv[1], "--repl", "--instructions", "0"], stdin=slave, stdout=slave,
                            stderr=slave, env=environment, preexec_fn=setup_terminal)
 os.close(slave)
 transcript = b""

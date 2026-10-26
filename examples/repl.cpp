@@ -243,11 +243,11 @@ namespace mx {
             return text.substr(first, text.find_last_not_of(" \t\r\n") - first + 1);
         }
     } // namespace
-    int run_repl(const char *filename, const char *module_path, const char *imports_path) {
+    int run_repl(const char *filename, const char *module_path, const char *imports_path, ExecutionLimits limits) {
         try {
             LineReader reader;
-            auto make_interpreter = [] {
-                auto interpreter = std::make_unique<Interpreter>();
+            auto make_interpreter = [limits] {
+                auto interpreter = std::make_unique<Interpreter>(limits);
                 interpreter->set_interrupt_handler([] { return interrupted != 0; });
                 return interpreter;
             };

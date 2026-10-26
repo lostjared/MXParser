@@ -87,6 +87,16 @@ mxparser_warnings(ls-c)
 target_link_libraries(test-parser PRIVATE mxparser MXLex::mxlex Argz::argz)
 target_link_libraries(parser-test PRIVATE mxparser MXLex::mxlex Argz::argz)
 target_link_libraries(ls-c PRIVATE mxparser MXLex::mxlex Argz::argz)
+if(WITH_SDL3_DEMO)
+    add_custom_target(run-tetris
+        COMMAND $<TARGET_FILE:ls-c> --run-program "${CMAKE_CURRENT_SOURCE_DIR}/examples/graphics/tetris.c"
+            --module $<TARGET_FILE:ls-graphics>
+            --imports "${CMAKE_CURRENT_SOURCE_DIR}/examples/graphics/graphics.ls-h"
+            --instructions 0
+        DEPENDS ls-c ls-graphics
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        USES_TERMINAL)
+endif()
 
 install(TARGETS mxparser
     EXPORT mxparserTargets
@@ -130,6 +140,13 @@ install(FILES cmake/FindLibFFI.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/m
 include(CTest)
 if(BUILD_TESTING)
     if(WITH_SDL3_DEMO)
+        add_executable(tetris-tests tests/tetris.cpp)
+        target_link_libraries(tetris-tests PRIVATE mxparser SDL3::SDL3)
+        mxparser_warnings(tetris-tests)
+        add_test(NAME sdl3-tetris COMMAND tetris-tests $<TARGET_FILE:ls-graphics>
+            "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/tetris-tests-data")
+        set_tests_properties(sdl3-tetris PROPERTIES
+            ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software" TIMEOUT 30)
         add_executable(graphics-tests tests/graphics.cpp)
         target_link_libraries(graphics-tests PRIVATE mxparser SDL3::SDL3)
         mxparser_warnings(graphics-tests)

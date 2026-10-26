@@ -668,6 +668,12 @@ metadata is retained until program replacement for reliable dangling-pointer
 checks. `ExecutionException` carries runtime source locations; validation still
 uses `SemanticException`.
 
+An instruction budget of zero disables that budget while preserving cancellation
+polling and the other execution limits. `ls-c --instructions count` (`-n count`)
+sets it for program execution or the REPL, including after `:reset`. Use
+`--instructions 0` for a long-running interactive program such as Tetris; the
+default budget remains unchanged.
+
 `Interpreter::import_module(module_path, declarations_path)` reads `.ls-h` text
 files containing `__import__ return_type name(parameters);` declarations and binds
 the matching exported C symbols using libffi and the platform loader. No module

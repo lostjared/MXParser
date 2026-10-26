@@ -171,8 +171,10 @@ namespace mx {
         }
         void tick() {
             require(!interrupt_handler || !interrupt_handler(), "execution interrupted");
-            require(remaining > 0, "instruction limit exceeded");
-            --remaining;
+            if (limits.instructions != 0) {
+                require(remaining > 0, "instruction limit exceeded");
+                --remaining;
+            }
         }
         enum class Action { Nop, Expression, Declaration, Test, Jump, Selection, Return };
         struct Instruction {

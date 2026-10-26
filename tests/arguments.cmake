@@ -37,7 +37,7 @@ foreach(pair IN ITEMS "s;syntax" "S;syntax-program" "c;check-program" "r;run-pro
     endforeach()
 endforeach()
 
-foreach(args IN ITEMS "--unknown" "-x" "-f" "--file" "--file=" "--run-program" "-s" "-r;-c;program.c" "program.c;expression.c" "-f;program.c;program.c" "--repl=value" "--module;module.so" "--imports;header.ls-h" "--module=" "--imports=" "--module;module.so;--imports;header.ls-h;--syntax-program;program.c" "--module;a.so;--module;b.so;--imports;header.ls-h" "--module;a.so;--imports;a.ls-h;--imports;b.ls-h")
+foreach(args IN ITEMS "--instructions" "--instructions=" "--instructions;-1" "--instructions;abc" "--instructions;1.2" "--instructions;0;--instructions;1" "--syntax-program;program.c;--instructions;0" "--unknown" "-x" "-f" "--file" "--file=" "--run-program" "-s" "-r;-c;program.c" "program.c;expression.c" "-f;program.c;program.c" "--repl=value" "--module;module.so" "--imports;header.ls-h" "--module=" "--imports=" "--module;module.so;--imports;header.ls-h;--syntax-program;program.c" "--module;a.so;--module;b.so;--imports;header.ls-h" "--module;a.so;--imports;a.ls-h;--imports;b.ls-h")
     execute_process(COMMAND "${PARSER}" ${args} WORKING_DIRECTORY "${OUTPUT_DIR}"
         RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 10)
     if(status EQUAL 0 OR errors STREQUAL "")
@@ -49,4 +49,17 @@ execute_process(COMMAND "${PARSER}" -p -- -program.c WORKING_DIRECTORY "${OUTPUT
 string(REPLACE "\r\n" "\n" output "${output}")
 if(NOT status EQUAL 0 OR NOT output STREQUAL "Result: 7\n" OR NOT errors STREQUAL "")
     message(FATAL_ERROR "End-of-options filename failed: ${status}\n${output}\n${errors}")
+endif()
+
+file(WRITE "${OUTPUT_DIR}/budget.c" "int main(void){int n=0;while(n<500)++n;return n;}\n")
+execute_process(COMMAND "${PARSER}" --print-result --instructions 100 "${OUTPUT_DIR}/budget.c"
+    RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 10)
+if(status EQUAL 0 OR NOT errors MATCHES "instruction limit exceeded")
+    message(FATAL_ERROR "Explicit instruction budget was not enforced: ${status}\n${errors}")
+endif()
+execute_process(COMMAND "${PARSER}" --print-result --instructions 0 "${OUTPUT_DIR}/budget.c"
+    RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE errors TIMEOUT 10)
+string(REPLACE "\r\n" "\n" output "${output}")
+if(NOT status EQUAL 0 OR NOT output STREQUAL "Result: 500\n" OR NOT errors STREQUAL "")
+    message(FATAL_ERROR "Unlimited instruction budget failed: ${status}\n${output}\n${errors}")
 endif()

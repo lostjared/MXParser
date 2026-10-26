@@ -4,6 +4,10 @@ This optional demo exports a small C API that can be imported through
 `graphics.ls-h`. It uses one window, a persistent canvas, and integer image IDs,
 so no SDL pointers or structs cross the interpreter's native-call boundary.
 
+For a playable example without a demo timeout, see [Tetris in ls-C](tetris.md).
+It includes colored blocks, keyboard input, line clearing, next/hold previews,
+pause, and restart. Build and play with the `run-tetris` target.
+
 ## Build
 
 Install SDL3 development files and libffi, then run from the repository root:
@@ -109,8 +113,10 @@ Enter `graphics_demo(600, 16)` at the prompt.
 | `gfx_image_free(id)` | Release an image. Freed IDs remain invalid, including after closing and reopening the window. |
 | `gfx_poll()`, `gfx_running()` | Read the next supported event, or query whether the window is open without a quit request. |
 | `gfx_key()`, `gfx_key_down(key)` | Read the last keyboard event's SDL keycode, or query a key's held state after polling. Printable keys use character codes; Escape is 27. |
+| `gfx_key_repeat()` | Return 1 if the last keyboard event was an OS auto-repeat event, otherwise 0. |
 | `gfx_mouse_x()`, `gfx_mouse_y()`, `gfx_mouse_button()` | Read data from the last mouse event. Button 1 is left, 2 middle, 3 right. |
 | `gfx_delay(milliseconds)` | Sleep between frames. Delay must be nonnegative. |
+| `gfx_ticks()` | Return monotonic elapsed milliseconds as an unsigned long long. |
 | `gfx_message(title, message)` | Display a modal informational message box. |
 
 Drawing/window operations return 1 on success and 0 on failure, with diagnostics

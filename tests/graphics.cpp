@@ -104,6 +104,9 @@ int main(int argc, char **argv) {
             value(interpreter, "gfx_rect(1,1,-1,1)", "0");
             value(interpreter, "gfx_delay(-1)", "0");
             value(interpreter, "gfx_delay(0)", "1");
+            interpreter.submit("unsigned long long clock_start=gfx_ticks();");
+            value(interpreter, "gfx_delay(1)", "1");
+            value(interpreter, "gfx_ticks()>=clock_start", "1");
             interpreter.submit("int picture=gfx_image_load(" + c_string(argv[3]) + ");");
             value(interpreter, "picture>0", "1");
             value(interpreter, "gfx_image_width(picture)", "32");
@@ -143,7 +146,13 @@ int main(int argc, char **argv) {
             check(SDL_PushEvent(&event), SDL_GetError());
             event_value(interpreter, "2");
             value(interpreter, "gfx_key()", "27");
+            value(interpreter, "gfx_key_repeat()", "0");
+            event.key.repeat = true;
+            check(SDL_PushEvent(&event), SDL_GetError());
+            event_value(interpreter, "2");
+            value(interpreter, "gfx_key_repeat()", "1");
             event.type = SDL_EVENT_KEY_UP;
+            event.key.repeat = false;
             check(SDL_PushEvent(&event), SDL_GetError());
             event_value(interpreter, "3");
             event = {};

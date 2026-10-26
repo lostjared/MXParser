@@ -71,6 +71,7 @@ namespace mx {
         SourceLocation location;
     };
     struct ExecutionLimits {
+        /** Instruction budget per load/call/submit; zero disables the budget. */
         size_t instructions = 20000000;
         size_t recursion = 256;
         size_t object_bytes = 1024 * 1024;

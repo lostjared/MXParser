@@ -105,6 +105,7 @@ cmake --build build/cmake
 | `-f filename` | `--file filename` | Select the input file |
 | `-m library` | `--module library` | Load a native library for execution or the REPL; pair with `--imports` |
 | `-H header.ls-h` | `--imports header.ls-h` | Import the native library's function declarations |
+| `-n count` | `--instructions count` | Set the execution budget; 0 disables it for a long-running game or REPL session |
 
 Choose one mode. A filename can also be positional, so `ls-c -r example.c`
 and `ls-c --run-program --file example.c` are equivalent. Options may appear
@@ -426,6 +427,12 @@ keyboard/mouse/quit events through `graphics.ls-h`. Build it with
 `-DWITH_SDL3_DEMO=ON`. To load a module when running a regular program, pass
 `--module library-path --imports header.ls-h` alongside `--run-program` or
 `--print-result`. Those options also work with `--repl`, including preloaded code.
+
+The playable [Tetris example](examples/graphics/tetris.md) is written entirely in
+ls-C and uses this module. Build with `-DWITH_SDL3_DEMO=ON`, then run the
+`run-tetris` target for colored blocks, keyboard controls, line clears, hold/next
+previews, pause, and restart. The target uses `--instructions 0` for unlimited
+gameplay; the default interpreter budget stays at 20,000,000 operations.
 
 ## Validated execution
 

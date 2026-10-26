@@ -31,11 +31,13 @@ GRAPHICS_API int gfx_image_free(int image);
 GRAPHICS_API int gfx_poll(void);
 GRAPHICS_API int gfx_running(void);
 GRAPHICS_API int gfx_key(void);
+GRAPHICS_API int gfx_key_repeat(void);
 GRAPHICS_API int gfx_key_down(int key);
 GRAPHICS_API int gfx_mouse_x(void);
 GRAPHICS_API int gfx_mouse_y(void);
 GRAPHICS_API int gfx_mouse_button(void);
 GRAPHICS_API int gfx_delay(int milliseconds);
+GRAPHICS_API unsigned long long gfx_ticks(void);
 GRAPHICS_API int gfx_message(const char *title, const char *message);
 #ifdef __cplusplus
 }

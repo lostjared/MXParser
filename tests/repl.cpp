@@ -152,6 +152,15 @@ int main() {
         error(limited, "forever()", "instruction limit");
         error(limited, "while(1) {}", "instruction limit");
         value(limited, "2+2", "4");
+        mx::Interpreter unlimited({0, 20, 1024});
+        quiet(unlimited, "int count=0;");
+        quiet(unlimited, "while(count<1000) ++count;");
+        value(unlimited, "count", "1000");
+        size_t unlimited_polls = 0;
+        unlimited.set_interrupt_handler([&] { return ++unlimited_polls > 200; });
+        error(unlimited, "while(1) {}", "execution interrupted");
+        unlimited.set_interrupt_handler({});
+        value(unlimited, "2+2", "4");
         mx::Interpreter cancellable;
         quiet(cancellable, "int progress=0;");
         size_t polls = 0;

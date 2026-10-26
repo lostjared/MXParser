@@ -24,7 +24,7 @@ namespace {
         SDL_Texture *canvas = nullptr;
         std::map<int, Image> images;
         int next_image = 1;
-        int key = 0, mouse_x = 0, mouse_y = 0, mouse_button = 0;
+        int key = 0, key_repeat = 0, mouse_x = 0, mouse_y = 0, mouse_button = 0;
         bool initialized = false, running = false;
         ~Graphics() { close(); }
         void close() {
@@ -38,7 +38,7 @@ namespace {
             renderer = nullptr;
             window = nullptr;
             running = false;
-            key = mouse_x = mouse_y = mouse_button = 0;
+            key = key_repeat = mouse_x = mouse_y = mouse_button = 0;
             if (initialized)
                 SDL_QuitSubSystem(SDL_INIT_VIDEO);
             initialized = false;
@@ -199,6 +199,7 @@ int gfx_poll(void) {
         }
         if ((event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) && event.key.windowID == window) {
             graphics.key = static_cast<int>(event.key.key);
+            graphics.key_repeat = event.key.repeat ? 1 : 0;
             return event.type == SDL_EVENT_KEY_DOWN ? 2 : 3;
         }
         if (event.type == SDL_EVENT_MOUSE_MOTION && event.motion.windowID == window) {
@@ -219,6 +220,7 @@ int gfx_poll(void) {
 }
 int gfx_running(void) { return graphics.running ? 1 : 0; }
 int gfx_key(void) { return graphics.key; }
+int gfx_key_repeat(void) { return graphics.key_repeat; }
 int gfx_key_down(int key) {
     if (!graphics.ready() || key < 0)
         return 0;
@@ -236,6 +238,7 @@ int gfx_delay(int milliseconds) {
     SDL_Delay(static_cast<Uint32>(milliseconds));
     return 1;
 }
+unsigned long long gfx_ticks(void) { return SDL_GetTicks(); }
 int gfx_message(const char *title, const char *message) {
     if (!graphics.ready())
         return 0;
