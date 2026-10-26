@@ -379,8 +379,9 @@ one-past address). This is typed object storage, not a byte-addressable host
 process: incompatible representation casts and character-byte aliasing into
 other object types, and casts that recover enclosing objects from member bounds,
 are unsupported. External libraries, allocation functions,
-and linker support remain outside the subset; `lsprintf` is the built-in stdout
-exception. No complete undefined-behavior or
+and linker support remain outside the subset; applications can register C++
+callbacks for external functions as described below. `lsprintf` is built in.
+No complete undefined-behavior or
 unsequenced-access detection is promised.
 
 `ExecutionLimits` defaults to one million instructions per call/load, 256 call
@@ -396,6 +397,77 @@ storage/result conventions differ. Generated binaries and C files stay in the
 build tree. Legacy expression mode and `Evaluate` retain their previous behavior;
 ICode/HTML remain illustrative numeric output with explicit object-operation
 errors, rather than a backend for the interpreter.
+
+## Calling C++ functions from interpreted C
+
+Register a C++ function by name and declare its C prototype in the interpreted
+program. Registration works before or after `load()` and persists across loads.
+It also works with interactive `submit()`:
+
+```cpp
+#include <MXParser/interpreter.hpp>
+
+int add(int left, int right) { return left + right; }
+
+mx::Interpreter interpreter;
+interpreter.register_function("add", &add);
+interpreter.submit("int add(int left, int right);");
+auto result = interpreter.submit("add(2, 3)"); // optional string containing "5"
+```
+
+The function-pointer adapter accepts C++ arithmetic parameters, `std::string`
+(including `const std::string &`), and `mx::NativeObject` views. It returns a
+number or `void`. Choose C++ numeric types that match the declared C prototype;
+out-of-range argument conversions throw. C strings become copied C++ strings.
+Raw host pointers and mutable C++ reference parameters are not supported.
+
+For capturing lambdas or custom argument handling, register a callback that
+receives `const std::vector<mx::NativeObject> &` and returns `mx::ExecutionValue`:
+
+```cpp
+int calls = 0;
+interpreter.register_function("update", [&](const std::vector<mx::NativeObject> &args)
+    -> mx::ExecutionValue {
+    ++calls;
+    auto record = args.at(0).dereference();
+    record.member("total").set(std::int64_t{42});
+    record.member("samples").at(1).set(3.5);
+    return std::monostate{}; // void
+});
+interpreter.submit(R"(
+    struct Record { int total; double samples[2]; };
+    void update(struct Record *record);
+    struct Record record={0,{1.0,2.0}};
+)");
+interpreter.submit("update(&record);");
+auto total = interpreter.submit("record.total"); // "42"
+```
+
+`NativeObject` provides `type()`, `value()` (the scalar variant), `as<T>()`,
+`set(value)`, `dereference()`, `at(index)`, `member(name)`, and `string()`.
+Use `dereference().member(name)` for a pointer to a struct, and `at(index)`
+for pointers or fixed arrays. String reads require a terminated character
+array/pointer and respect the output-byte limit.
+
+Arguments follow C value semantics: writing a scalar or struct parameter changes
+the callback's private copy; writing through a pointer changes the original
+interpreter object. Bounds, object lifetime, initialization, and const checks
+remain active. Handles, including member and element views, expire when the
+callback returns or throws; keeping them for later access reports an error.
+They never expose host addresses.
+
+Callbacks return signed/unsigned 64-bit integers, `double`, or `monostate` for
+void; values convert to the declared C return type. Struct and pointer return
+types are currently unsupported. Functions need explicit prototypes, including
+`(void)` for no parameters. Duplicate registrations, `lsprintf`, and registration
+over a C definition are rejected. Exceptions become `ExecutionException` at the
+C call site. Callbacks must not reenter the same interpreter; captured host
+objects must stay alive while registered. Register only callbacks you intend
+interpreted programs to invoke; host code runs outside interpreter instruction
+limits.
+
+See [examples/native.cpp](examples/native.cpp) for a complete embedding example;
+build and run the `native-example` target with CMake.
 
 ## Built-in formatted output
 

@@ -602,6 +602,16 @@ or `double`). The public boundary exchanges scalars; object pointers and struct
 values are supported between interpreted C functions. Public object-result calls
 report an explicit error; expose a scalar C wrapper when needed.
 
+Applications may map external prototypes to C++ functions with
+`Interpreter::register_function(name, callback)`. The callback receives typed
+`NativeObject` arguments with scalar conversion, checked pointer/array access,
+struct member views, and string reads. Parameters are private C value copies;
+pointer writes affect the original objects. Views expire after the callback.
+Callbacks return scalars or void and cannot reenter the same interpreter.
+A function-pointer overload adapts C++ numbers, strings, and object views.
+Registrations persist across program loads. See the
+[embedding examples and API details](../README.md#calling-c-functions-from-interpreted-c).
+
 The semantic API now exposes resolved object/parameter symbols through
 `symbol(declarator)` and `symbol(parameter)`, and complete canonical struct
 members through `members(type)`. This metadata remains valid until the next

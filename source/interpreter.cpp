@@ -107,8 +107,55 @@ namespace mx {
             return result;
         }
     } // namespace
+    struct NativeObject::State {
+        std::weak_ptr<int> lifetime;
+        TypePtr type;
+        std::function<ExecutionValue()> read;
+        std::function<void(const ExecutionValue &)> write;
+        std::function<NativeObject(size_t)> element;
+        std::function<NativeObject(const std::string &)> field;
+        std::function<std::string()> text;
+        void check() const {
+            if (lifetime.expired())
+                throw std::runtime_error("native object used outside its callback");
+        }
+    };
+    NativeObject::NativeObject(std::shared_ptr<State> state) : state(std::move(state)) {}
+    TypePtr NativeObject::type() const {
+        state->check();
+        return state->type;
+    }
+    ExecutionValue NativeObject::value() const {
+        state->check();
+        return state->read();
+    }
+    void NativeObject::set(const ExecutionValue &value) const {
+        state->check();
+        state->write(value);
+    }
+    NativeObject NativeObject::dereference() const {
+        state->check();
+        if (state->type->unqualified().kind != K::Pointer)
+            throw std::runtime_error("dereference requires a pointer");
+        return state->element(0);
+    }
+    NativeObject NativeObject::at(size_t index) const {
+        state->check();
+        return state->element(index);
+    }
+    NativeObject NativeObject::member(const std::string &name) const {
+        state->check();
+        return state->field(name);
+    }
+    std::string NativeObject::string() const {
+        state->check();
+        return state->text();
+    }
+
     struct Interpreter::Implementation {
         SemanticAnalyzer analyzer;
+        std::unordered_map<std::string, NativeCallback> callbacks;
+        bool in_callback = false;
         ExecutionLimits limits;
         size_t remaining = 0;
         SourceLocation location;
@@ -165,6 +212,111 @@ namespace mx {
             }
         }
         Value integer(uint64_t bits, TypePtr type = Type::scalar_type(S::Int)) { return {type, bits & mask(type)}; }
+        Value from_public(const ExecutionValue &value) {
+            if (auto n = std::get_if<int64_t>(&value))
+                return integer(std::bit_cast<uint64_t>(*n), Type::scalar_type(S::LongLong));
+            if (auto n = std::get_if<uint64_t>(&value))
+                return integer(*n, Type::scalar_type(S::UnsignedLongLong));
+            if (auto n = std::get_if<double>(&value))
+                return {Type::scalar_type(S::Double), *n};
+            return {};
+        }
+        ExecutionValue to_public(const Value &value) {
+            if (auto n = std::get_if<uint64_t>(&value.data))
+                return unsigned_type(value.type) ? ExecutionValue(*n) : ExecutionValue(signed_bits(*n, value.type));
+            if (auto n = std::get_if<double>(&value.data))
+                return *n;
+            if (std::holds_alternative<std::monostate>(value.data))
+                return std::monostate{};
+            fail("object is not a scalar value");
+        }
+        NativeObject native_object(Reference ref, const std::shared_ptr<int> &lifetime) {
+            auto state = std::make_shared<NativeObject::State>();
+            state->lifetime = lifetime;
+            state->type = ref.type;
+            state->read = [this, ref] { return to_public(load(ref)); };
+            state->write = [this, ref](const ExecutionValue &value) {
+                require(!ref.type->top_qualifiers().is_const, "write to const object");
+                require(!std::holds_alternative<std::monostate>(value), "cannot store void value");
+                require(!aggregate(ref.type), "set requires a scalar object");
+                store(ref, from_public(value));
+            };
+            std::weak_ptr<int> weak = lifetime;
+            state->element = [this, ref, weak](size_t index) {
+                auto t = bare(ref.type);
+                require(t->kind == K::Array || t->kind == K::Pointer, "index requires an array or pointer");
+                Reference child;
+                if (t->kind == K::Array) {
+                    require(index < *t->bound, "out-of-bounds native array access");
+                    child = array_element(ref, index);
+                    child.type = Type::qualified(child.type, ref.type->top_qualifiers());
+                } else {
+                    auto pointer = std::get<Pointer>(load(ref).data);
+                    auto width = size_of(t->element);
+                    require(width && pointer.offset <= pointer.upper && index <= (pointer.upper - pointer.offset) / width, "out-of-bounds native pointer access");
+                    pointer.offset += index * width;
+                    child = {pointer, t->element};
+                }
+                access(child);
+                return native_object(child, weak.lock());
+            };
+            state->field = [this, ref, weak](const std::string &name) {
+                auto t = bare(ref.type);
+                require(t->kind == K::Tagged && t->tag == TagKind::Struct, "member requires a struct object");
+                for (const auto &field : analyzer.members(t))
+                    if (field.name == name) {
+                        auto child = member(ref, Type::qualified(field.type, ref.type->top_qualifiers()), field.offset);
+                        access(child);
+                        return native_object(child, weak.lock());
+                    }
+                fail("unknown native object member: " + name);
+            };
+            state->text = [this, ref] { return c_string(load(ref)); };
+            return NativeObject(std::move(state));
+        }
+        Value invoke_native(const std::string &name, const std::vector<Value> &arguments, const NativeCallback &callback, TypePtr signature) {
+            if (!signature) {
+                auto symbol = analyzer.symbols().lookup(name);
+                require(symbol && symbol->kind == SemanticSymbolKind::Function, "native function requires a C prototype: " + name);
+                signature = symbol->type;
+            }
+            signature = bare(signature);
+            require(signature->has_prototype, "native function requires a C prototype: " + name);
+            require(arguments.size() == signature->parameters.size(), "wrong argument count for " + name);
+            require(bare(signature->element)->kind == K::Scalar, "native callbacks return scalars or void only");
+            tick();
+            auto lifetime = std::make_shared<int>(0);
+            std::vector<Allocation *> temporaries;
+            std::vector<NativeObject> objects;
+            try {
+                for (size_t i = 0; i < arguments.size(); ++i) {
+                    auto ref = allocate(signature->parameters[i], false);
+                    temporaries.push_back(ref.pointer.allocation);
+                    store(ref, arguments[i], true);
+                    objects.push_back(native_object(ref, lifetime));
+                }
+                in_callback = true;
+                auto result = callback(objects);
+                in_callback = false;
+                lifetime.reset();
+                for (auto allocation : temporaries)
+                    allocation->alive = false;
+                require(bare(signature->element)->scalar == S::Void || !std::holds_alternative<std::monostate>(result), "native callback returned void for a non-void function");
+                return convert(from_public(result), signature->element);
+            } catch (const std::exception &error) {
+                in_callback = false;
+                lifetime.reset();
+                for (auto allocation : temporaries)
+                    allocation->alive = false;
+                fail("native callback " + name + ": " + error.what());
+            } catch (...) {
+                in_callback = false;
+                lifetime.reset();
+                for (auto allocation : temporaries)
+                    allocation->alive = false;
+                fail("native callback " + name + " threw an unknown exception");
+            }
+        }
         uint64_t bits(const Value &value) {
             require(std::holds_alternative<uint64_t>(value.data), "integer operand required");
             return std::get<uint64_t>(value.data);
@@ -500,7 +652,7 @@ namespace mx {
                 for (const auto &arg : n->arguments)
                     args.push_back(eval(*arg));
                 location = n->location;
-                return invoke(callee->var.get_token(), args);
+                return invoke(callee->var.get_token(), args, analyzer.info(*callee).type);
             }
             if (auto n = dynamic_cast<const UnaryNode *>(&expression)) {
                 auto op = n->op.get_token();
@@ -977,9 +1129,13 @@ namespace mx {
             }
             return std::cout ? integer(output.size()) : integer(UINT32_MAX);
         }
-        Value invoke(const std::string &name, const std::vector<Value> &arguments) {
+        Value invoke(const std::string &name, const std::vector<Value> &arguments, TypePtr signature = {}) {
             if (name == "lsprintf")
                 return print(arguments);
+            if (auto callback = callbacks.find(name); callback != callbacks.end()) {
+                require(!functions.contains(name), "native callback conflicts with C definition: " + name);
+                return invoke_native(name, arguments, callback->second, std::move(signature));
+            }
             auto found = functions.find(name);
             require(found != functions.end(), "undefined function: " + name);
             auto &plan = found->second;
@@ -1047,7 +1203,13 @@ namespace mx {
                 throw;
             }
         }
+        void check_native_definitions(const ProgramNode &program) {
+            for (const auto &node : program.declarations)
+                if (auto f = dynamic_cast<const FunctionNode *>(node.get()); f && f->body)
+                    require(!callbacks.contains(f->name.get_token()), "native callback conflicts with C definition: " + f->name.get_token());
+        }
         void install(const ProgramNode &program) {
+            check_native_definitions(program);
             for (const auto &node : program.declarations) {
                 if (auto f = dynamic_cast<const FunctionNode *>(node.get()); f && f->body) {
                     auto &plan = functions[f->name.get_token()];
@@ -1176,6 +1338,7 @@ namespace mx {
                 require(expression_function && expression_function->body && expression_function->body->statements.size() == 1 && dynamic_cast<ExprNode *>(expression_function->body->statements.front().get()), "REPL input must be one expression, declaration, or function definition");
             }
             auto accepted = candidate.get();
+            check_native_definitions(*accepted);
             auto canonical = candidate->to_string();
             submissions.push_back(std::move(candidate));
             analyzer.append(*accepted, true);
@@ -1194,25 +1357,36 @@ namespace mx {
     Interpreter::Interpreter(ExecutionLimits limits) : implementation(std::make_unique<Implementation>(limits)), limits(limits) {}
     Interpreter::~Interpreter() = default;
     void Interpreter::load(const ProgramNode &program) {
+        implementation->require(!implementation->in_callback, "cannot reenter interpreter from native callback");
         auto next = std::make_unique<Implementation>(limits);
+        next->callbacks = implementation->callbacks;
         next->load(program);
         implementation = std::move(next);
     }
-    std::optional<std::string> Interpreter::submit(const std::string &source) { return implementation->submit(source); }
+    std::optional<std::string> Interpreter::submit(const std::string &source) {
+        implementation->require(!implementation->in_callback, "cannot reenter interpreter from native callback");
+        return implementation->submit(source);
+    }
+    void Interpreter::register_function(const std::string &name, NativeCallback callback) {
+        auto &runtime = *implementation;
+        runtime.require(!runtime.in_callback, "cannot reenter interpreter from native callback");
+        runtime.require(!name.empty() && name != "lsprintf", "invalid or reserved native function name");
+        auto identifier_start = [](char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; };
+        runtime.require(identifier_start(name.front()) && std::all_of(name.begin(), name.end(), [&](char c) { return identifier_start(c) || (c >= '0' && c <= '9'); }), "invalid native function name");
+        runtime.require(bool(callback), "native callback must not be empty");
+        runtime.require(!runtime.callbacks.contains(name), "native function already registered: " + name);
+        runtime.require(!runtime.functions.contains(name), "native callback conflicts with C definition: " + name);
+        auto symbol = runtime.analyzer.symbols().lookup(name);
+        runtime.require(!symbol || symbol->kind == SemanticSymbolKind::Function, "native callback conflicts with C object: " + name);
+        runtime.callbacks.emplace(name, std::move(callback));
+    }
     ExecutionValue Interpreter::call(const std::string &name, const std::vector<ExecutionValue> &arguments) {
         auto &runtime = *implementation;
+        runtime.require(!runtime.in_callback, "cannot reenter interpreter from native callback");
         runtime.remaining = limits.instructions;
         std::vector<Value> args;
-        for (const auto &arg : arguments) {
-            if (auto n = std::get_if<int64_t>(&arg))
-                args.push_back(runtime.integer(std::bit_cast<uint64_t>(*n), Type::scalar_type(S::LongLong)));
-            else if (auto n = std::get_if<uint64_t>(&arg))
-                args.push_back(runtime.integer(*n, Type::scalar_type(S::UnsignedLongLong)));
-            else if (auto n = std::get_if<double>(&arg))
-                args.push_back({Type::scalar_type(S::Double), *n});
-            else
-                args.push_back({});
-        }
+        for (const auto &arg : arguments)
+            args.push_back(runtime.from_public(arg));
         auto value = runtime.invoke(name, args);
         if (auto n = std::get_if<uint64_t>(&value.data))
             return unsigned_type(value.type) ? ExecutionValue(*n) : ExecutionValue(signed_bits(*n, value.type));
