@@ -434,6 +434,10 @@ ls-C and uses this module. Build with `-DWITH_SDL3_DEMO=ON`, then run the
 previews, pause, and restart. The target uses `--instructions 0` for unlimited
 gameplay; the default interpreter budget stays at 20,000,000 operations.
 
+[Columns](examples/graphics/columns.md) adds falling three-gem columns, color
+cycling, horizontal/vertical/diagonal matches, and cascading clears. The
+`run-columns` target builds and launches it with no demo timeout.
+
 ## Validated execution
 
 `mx::Interpreter` in `<MXParser/interpreter.hpp>` validates and loads a program,

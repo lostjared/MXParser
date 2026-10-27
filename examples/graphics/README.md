@@ -8,6 +8,10 @@ For a playable example without a demo timeout, see [Tetris in ls-C](tetris.md).
 It includes colored blocks, keyboard input, line clearing, next/hold previews,
 pause, and restart. Build and play with the `run-tetris` target.
 
+[Columns in ls-C](columns.md) is another playable example: move and cycle
+three-gem columns, match colors in any direction, and build cascade chains.
+Launch it with `run-columns`; it also has no demo timeout.
+
 ## Build
 
 Install SDL3 development files and libffi, then run from the repository root:

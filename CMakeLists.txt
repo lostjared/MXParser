@@ -96,6 +96,14 @@ if(WITH_SDL3_DEMO)
         DEPENDS ls-c ls-graphics
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         USES_TERMINAL)
+    add_custom_target(run-columns
+        COMMAND $<TARGET_FILE:ls-c> --run-program "${CMAKE_CURRENT_SOURCE_DIR}/examples/graphics/columns.c"
+            --module $<TARGET_FILE:ls-graphics>
+            --imports "${CMAKE_CURRENT_SOURCE_DIR}/examples/graphics/graphics.ls-h"
+            --instructions 0
+        DEPENDS ls-c ls-graphics
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        USES_TERMINAL)
 endif()
 
 install(TARGETS mxparser
@@ -140,6 +148,13 @@ install(FILES cmake/FindLibFFI.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/m
 include(CTest)
 if(BUILD_TESTING)
     if(WITH_SDL3_DEMO)
+        add_executable(columns-tests tests/columns.cpp)
+        target_link_libraries(columns-tests PRIVATE mxparser SDL3::SDL3)
+        mxparser_warnings(columns-tests)
+        add_test(NAME sdl3-columns COMMAND columns-tests $<TARGET_FILE:ls-graphics>
+            "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/columns-tests-data")
+        set_tests_properties(sdl3-columns PROPERTIES
+            ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software" TIMEOUT 30)
         add_executable(tetris-tests tests/tetris.cpp)
         target_link_libraries(tetris-tests PRIVATE mxparser SDL3::SDL3)
         mxparser_warnings(tetris-tests)
