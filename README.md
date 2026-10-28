@@ -2,6 +2,9 @@
 
 MXParser is a simple C++23 parser built on MXLex.
 
+See [LANGUAGE.md](LANGUAGE.md) for the supported language syntax, runtime
+behavior, examples, and limitations.
+
 ## Requirements
 
 - A C++23 compiler
